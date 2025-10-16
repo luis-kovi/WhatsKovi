@@ -163,12 +163,7 @@ export const sendWhatsAppMessage = async (
     }
 
     const chatId = `${phoneNumber}@c.us`;
-    
-    if (mediaUrl) {
-      await clientData.client.sendMessage(chatId, message, { media: mediaUrl });
-    } else {
-      await clientData.client.sendMessage(chatId, message);
-    }
+    await clientData.client.sendMessage(chatId, message);
 
     return true;
   } catch (error) {
