@@ -11,7 +11,7 @@ export const listConnections = async (req: AuthRequest, res: Response) => {
 
     return res.json(connections);
   } catch (error) {
-    return res.status(500).json({ error: 'Erro ao listar conexões' });
+    return res.status(500).json({ error: 'Erro ao listar conexoes' });
   }
 };
 
@@ -28,14 +28,14 @@ export const createConnection = async (req: AuthRequest, res: Response) => {
     const connection = await prisma.whatsAppConnection.create({
       data: {
         name,
-        isDefault: isDefault || false,
+        isDefault: Boolean(isDefault),
         status: 'DISCONNECTED'
       }
     });
 
     return res.status(201).json(connection);
   } catch (error) {
-    return res.status(500).json({ error: 'Erro ao criar conexão' });
+    return res.status(500).json({ error: 'Erro ao criar conexao' });
   }
 };
 
@@ -45,9 +45,10 @@ export const startConnection = async (req: AuthRequest, res: Response) => {
 
     await initializeWhatsApp(id);
 
-    return res.json({ message: 'Conexão iniciada' });
+    return res.json({ message: 'Conexao iniciada' });
   } catch (error) {
-    return res.status(500).json({ error: 'Erro ao iniciar conexão' });
+    const message = error instanceof Error ? error.message : 'Falha ao iniciar conexao';
+    return res.status(500).json({ error: 'Erro ao iniciar conexao', message });
   }
 };
 
@@ -57,9 +58,9 @@ export const stopConnection = async (req: AuthRequest, res: Response) => {
 
     await disconnectWhatsApp(id);
 
-    return res.json({ message: 'Conexão encerrada' });
+    return res.json({ message: 'Conexao encerrada' });
   } catch (error) {
-    return res.status(500).json({ error: 'Erro ao encerrar conexão' });
+    return res.status(500).json({ error: 'Erro ao encerrar conexao' });
   }
 };
 
@@ -70,8 +71,8 @@ export const deleteConnection = async (req: AuthRequest, res: Response) => {
     await disconnectWhatsApp(id);
     await prisma.whatsAppConnection.delete({ where: { id } });
 
-    return res.json({ message: 'Conexão deletada' });
+    return res.json({ message: 'Conexao deletada' });
   } catch (error) {
-    return res.status(500).json({ error: 'Erro ao deletar conexão' });
+    return res.status(500).json({ error: 'Erro ao deletar conexao' });
   }
 };

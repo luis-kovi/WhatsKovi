@@ -132,6 +132,7 @@ model Ticket {
   id                String       @id @default(uuid())
   status            TicketStatus @default(PENDING)
   priority          Priority     @default(MEDIUM)
+  carPlate          String?
   unreadMessages    Int          @default(0)
   lastMessageAt     DateTime     @default(now())
   closedAt          DateTime?

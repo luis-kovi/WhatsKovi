@@ -3,10 +3,44 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🌱 Iniciando seed...');
+async function ensureQueue(data: {
+  name: string;
+  color: string;
+  description?: string | null;
+  greetingMessage?: string | null;
+  outOfHoursMessage?: string | null;
+  priority?: number;
+}) {
+  const existing = await prisma.queue.findFirst({ where: { name: data.name } });
+  if (existing) {
+    return existing;
+  }
 
-  // Criar usuário admin
+  return prisma.queue.create({ data });
+}
+
+async function ensureWhatsAppConnection() {
+  const existing = await prisma.whatsAppConnection.findFirst({
+    where: { isDefault: true }
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.whatsAppConnection.create({
+    data: {
+      name: 'WhatsApp Principal',
+      status: 'DISCONNECTED',
+      isDefault: true
+    }
+  });
+}
+
+async function main() {
+  console.log('==> Iniciando seed...');
+
+  // Admin account
   const adminPassword = await bcrypt.hash('admin123', 10);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@whatskovi.com' },
@@ -19,10 +53,9 @@ async function main() {
       maxTickets: 10
     }
   });
+  console.log('Admin pronto:', admin.email);
 
-  console.log('✅ Admin criado:', admin.email);
-
-  // Criar atendentes
+  // Agents
   const agentPassword = await bcrypt.hash('agent123', 10);
   const agent1 = await prisma.user.upsert({
     where: { email: 'atendente1@whatskovi.com' },
@@ -47,91 +80,79 @@ async function main() {
       maxTickets: 3
     }
   });
+  console.log('Atendentes prontos');
 
-  console.log('✅ Atendentes criados');
-
-  // Criar filas
-  const queue1 = await prisma.queue.create({
-    data: {
-      name: 'Suporte',
-      color: '#FF355A',
-      description: 'Fila de suporte técnico',
-      greetingMessage: 'Olá! Bem-vindo ao suporte. Como posso ajudar?',
-      priority: 1
-    }
+  // Queues
+  const queue1 = await ensureQueue({
+    name: 'Suporte',
+    color: '#FF355A',
+    description: 'Fila de suporte tecnico',
+    greetingMessage: 'Ola! Bem-vindo ao suporte. Como posso ajudar?',
+    priority: 1
   });
 
-  const queue2 = await prisma.queue.create({
-    data: {
-      name: 'Vendas',
-      color: '#00C853',
-      description: 'Fila de vendas',
-      greetingMessage: 'Olá! Seja bem-vindo ao setor de vendas!',
-      priority: 2
-    }
+  const queue2 = await ensureQueue({
+    name: 'Vendas',
+    color: '#00C853',
+    description: 'Fila de vendas',
+    greetingMessage: 'Ola! Seja bem-vindo ao setor de vendas!',
+    priority: 2
   });
+  console.log('Filas prontas');
 
-  console.log('✅ Filas criadas');
-
-  // Vincular atendentes às filas
+  // Queue membership
   await prisma.queueUser.createMany({
     data: [
       { userId: agent1.id, queueId: queue1.id },
       { userId: agent1.id, queueId: queue2.id },
       { userId: agent2.id, queueId: queue1.id }
-    ]
+    ],
+    skipDuplicates: true
   });
+  console.log('Atendentes vinculados as filas');
 
-  console.log('✅ Atendentes vinculados às filas');
-
-  // Criar tags
+  // Tags
   await prisma.tag.createMany({
     data: [
       { name: 'Urgente', color: '#FF0000' },
-      { name: 'Dúvida', color: '#FFA500' },
-      { name: 'Reclamação', color: '#FF355A' },
+      { name: 'Duvida', color: '#FFA500' },
+      { name: 'Reclamacao', color: '#FF355A' },
       { name: 'Elogio', color: '#00C853' }
-    ]
+    ],
+    skipDuplicates: true
   });
+  console.log('Tags criadas');
 
-  console.log('✅ Tags criadas');
-
-  // Criar respostas rápidas
+  // Quick replies
   await prisma.quickReply.createMany({
     data: [
       {
         shortcut: '/saudacao',
-        message: 'Olá {nome}! Como posso ajudar você hoje?',
+        message: 'Ola {nome}! Como posso ajudar voce hoje?',
         isGlobal: true
       },
       {
         shortcut: '/aguarde',
-        message: 'Por favor, aguarde um momento enquanto verifico isso para você.',
+        message: 'Por favor, aguarde um momento enquanto verifico isso para voce.',
         isGlobal: true
       },
       {
         shortcut: '/despedida',
-        message: 'Obrigado pelo contato! Estamos à disposição. Tenha um ótimo dia!',
+        message: 'Obrigado pelo contato! Estamos a disposicao. Tenha um otimo dia!',
         isGlobal: true
       }
-    ]
+    ],
+    skipDuplicates: true
   });
+  console.log('Respostas rapidas criadas');
 
-  console.log('✅ Respostas rápidas criadas');
+  // WhatsApp connection
+  await ensureWhatsAppConnection();
+  console.log('Conexao WhatsApp preparada');
 
-  // Criar conexão WhatsApp padrão
-  await prisma.whatsAppConnection.create({
-    data: {
-      name: 'WhatsApp Principal',
-      status: 'DISCONNECTED',
-      isDefault: true
-    }
-  });
-
-  console.log('✅ Conexão WhatsApp criada');
-
-  console.log('🎉 Seed concluído com sucesso!');
-  console.log('\n📝 Credenciais de acesso:');
+  console.log('Seed concluido com sucesso!');
+  console.log('');
+  console.log('Credenciais de acesso:');
   console.log('Admin: admin@whatskovi.com / admin123');
   console.log('Atendente 1: atendente1@whatskovi.com / agent123');
   console.log('Atendente 2: atendente2@whatskovi.com / agent123');
@@ -139,7 +160,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Erro no seed:', e);
+    console.error('Erro no seed:', e);
     process.exit(1);
   })
   .finally(async () => {

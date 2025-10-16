@@ -1,5 +1,17 @@
 FROM node:20-alpine
 
+RUN apk add --no-cache \
+  openssl \
+  chromium \
+  chromium-chromedriver \
+  nss \
+  freetype \
+  harfbuzz \
+  ttf-freefont
+
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 WORKDIR /app
 
 COPY package*.json ./

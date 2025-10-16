@@ -1,4 +1,6 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
+import fs from 'fs';
+import path from 'path';
 import qrcode from 'qrcode';
 import prisma from '../config/database';
 import { io } from '../server';
@@ -11,6 +13,23 @@ interface WhatsAppClient {
 
 const clients: Map<string, WhatsAppClient> = new Map();
 
+const uploadsDir = path.resolve(__dirname, '../../uploads');
+
+const ensureUploadsDir = () => {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+};
+
+const storeIncomingMedia = (data: string, mimetype?: string | null) => {
+  ensureUploadsDir();
+  const extension = mimetype ? `.${mimetype.split('/')[1] || 'bin'}` : '';
+  const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+  const filePath = path.join(uploadsDir, filename);
+  fs.writeFileSync(filePath, Buffer.from(data, 'base64'));
+  return { filename, url: `/uploads/${filename}`, absolutePath: filePath };
+};
+
 export const initializeWhatsApp = async (connectionId: string) => {
   try {
     const connection = await prisma.whatsAppConnection.findUnique({
@@ -18,20 +37,33 @@ export const initializeWhatsApp = async (connectionId: string) => {
     });
 
     if (!connection) {
-      throw new Error('Conexão não encontrada');
+      throw new Error('Conexao nao encontrada');
     }
+
+    const executablePath =
+      process.env.CHROMIUM_PATH ||
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      '/usr/bin/chromium-browser';
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: connectionId }),
       puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        executablePath,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--no-first-run',
+          '--no-zygote'
+        ]
       }
     });
 
     client.on('qr', async (qr) => {
       const qrCodeData = await qrcode.toDataURL(qr);
-      
+
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
         data: { qrCode: qrCodeData, status: 'CONNECTING' }
@@ -42,7 +74,7 @@ export const initializeWhatsApp = async (connectionId: string) => {
 
     client.on('ready', async () => {
       const info = client.info;
-      
+
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
         data: {
@@ -80,6 +112,18 @@ export const initializeWhatsApp = async (connectionId: string) => {
     return client;
   } catch (error) {
     console.error('Erro ao inicializar WhatsApp:', error);
+    try {
+      await prisma.whatsAppConnection.update({
+        where: { id: connectionId },
+        data: { status: 'ERROR', qrCode: null }
+      });
+      io.emit('whatsapp:error', {
+        connectionId,
+        message: error instanceof Error ? error.message : 'Falha ao iniciar conexao'
+      });
+    } catch (updateError) {
+      console.error('Erro ao atualizar status da conexao:', updateError);
+    }
     throw error;
   }
 };
@@ -95,7 +139,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
     if (!contact) {
       contact = await prisma.contact.create({
         data: {
-          name: msg._data.notifyName || phoneNumber,
+          name: msg._data?.notifyName || phoneNumber,
           phoneNumber
         }
       });
@@ -110,7 +154,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
     });
 
     if (!ticket) {
-      ticket = await prisma.ticket.create({
+      const createdTicket = await prisma.ticket.create({
         data: {
           contactId: contact.id,
           whatsappId: connectionId,
@@ -123,13 +167,51 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
         }
       });
 
+      ticket = await prisma.ticket.findUnique({
+        where: { id: createdTicket.id },
+        include: {
+          contact: true,
+          user: { select: { id: true, name: true, avatar: true } },
+          queue: true,
+          tags: { include: { tag: true } },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      if (!ticket) {
+        return;
+      }
+
       io.emit('ticket:new', ticket);
     }
 
-    const message = await prisma.message.create({
+    let mediaUrl: string | undefined;
+
+    if (msg.hasMedia) {
+      const media = await msg.downloadMedia();
+      if (media?.data) {
+        const stored = storeIncomingMedia(media.data, media.mimetype);
+        mediaUrl = stored.url;
+      }
+    }
+
+    const prismaMessage = await prisma.message.create({
       data: {
-        body: msg.body,
-        type: msg.type === 'chat' ? 'TEXT' : msg.type.toUpperCase(),
+        body: msg.body || (mediaUrl ? 'Arquivo recebido' : ''),
+        type:
+          msg.type === 'chat'
+            ? 'TEXT'
+            : msg.type === 'image'
+            ? 'IMAGE'
+            : msg.type === 'video'
+            ? 'VIDEO'
+            : msg.type === 'audio'
+            ? 'AUDIO'
+            : msg.type.toUpperCase(),
+        mediaUrl,
         ticketId: ticket.id,
         status: 'RECEIVED'
       }
@@ -143,7 +225,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
       }
     });
 
-    io.emit('message:new', { ...message, ticketId: ticket.id });
+    io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
   } catch (error) {
     console.error('Erro ao processar mensagem:', error);
   }
@@ -153,17 +235,26 @@ export const sendWhatsAppMessage = async (
   connectionId: string,
   phoneNumber: string,
   message: string,
-  mediaUrl?: string
+  mediaUrl?: string | null,
+  mediaPath?: string
 ) => {
   try {
     const clientData = clients.get(connectionId);
 
     if (!clientData) {
-      throw new Error('Cliente WhatsApp não encontrado');
+      throw new Error('Cliente WhatsApp nao encontrado');
     }
 
     const chatId = `${phoneNumber}@c.us`;
-    await clientData.client.sendMessage(chatId, message);
+
+    if (mediaPath) {
+      const media = MessageMedia.fromFilePath(mediaPath);
+      await clientData.client.sendMessage(chatId, media, {
+        caption: message
+      });
+    } else {
+      await clientData.client.sendMessage(chatId, message);
+    }
 
     return true;
   } catch (error) {

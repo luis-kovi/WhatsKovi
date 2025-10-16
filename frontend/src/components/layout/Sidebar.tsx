@@ -2,70 +2,94 @@
 
 import { useAuthStore } from '@/store/authStore';
 import { MessageSquare, Users, Settings, LogOut, BarChart3 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+
+const baseNav = [
+  {
+    label: 'Atendimentos',
+    icon: MessageSquare,
+    href: '/dashboard'
+  }
+];
+
+const adminNav = [
+  {
+    label: 'Usuarios',
+    icon: Users,
+    href: '/dashboard/users'
+  },
+  {
+    label: 'Relatorios',
+    icon: BarChart3,
+    href: '/dashboard/reports'
+  },
+  {
+    label: 'Configuracoes',
+    icon: Settings,
+    href: '/dashboard/settings'
+  }
+];
 
 export default function Sidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout } = useAuthStore();
+
+  const handleNavigate = (href: string) => {
+    if (pathname !== href) {
+      router.push(href);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
+  const navItems = user?.role === 'ADMIN' ? [...baseNav, ...adminNav] : baseNav;
+
   return (
-    <div className="w-20 bg-white border-r border-gray-200 flex flex-col items-center py-6">
+    <div className="flex w-20 flex-col items-center border-r border-gray-200 bg-white py-6">
       <div className="mb-8">
-        <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white font-bold text-xl">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white">
           WK
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-4">
-        <button
-          className="w-12 h-12 flex items-center justify-center rounded-xl bg-primary text-white hover:bg-primary/90 transition"
-          title="Atendimentos"
-        >
-          <MessageSquare size={24} />
-        </button>
+      <nav className="flex flex-1 flex-col gap-4">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
 
-        {user?.role === 'ADMIN' && (
-          <>
+          return (
             <button
-              className="w-12 h-12 flex items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 transition"
-              title="Usuários"
+              key={item.href}
+              onClick={() => handleNavigate(item.href)}
+              className={`flex h-12 w-12 items-center justify-center rounded-xl transition ${
+                isActive
+                  ? 'bg-primary text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              title={item.label}
             >
-              <Users size={24} />
+              <Icon size={24} />
             </button>
-
-            <button
-              className="w-12 h-12 flex items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 transition"
-              title="Relatórios"
-            >
-              <BarChart3 size={24} />
-            </button>
-
-            <button
-              className="w-12 h-12 flex items-center justify-center rounded-xl text-gray-600 hover:bg-gray-100 transition"
-              title="Configurações"
-            >
-              <Settings size={24} />
-            </button>
-          </>
-        )}
+          );
+        })}
       </nav>
 
       <div className="mt-auto">
         <div className="mb-4 text-center">
-          <div className="w-10 h-10 bg-gray-200 rounded-full mx-auto mb-1 flex items-center justify-center text-gray-600 font-semibold">
+          <div className="mx-auto mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 text-gray-600 font-semibold">
             {user?.name.charAt(0).toUpperCase()}
           </div>
-          <div className="w-3 h-3 bg-green-500 rounded-full mx-auto -mt-2 border-2 border-white"></div>
+          <div className="mx-auto -mt-2 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
         </div>
 
         <button
           onClick={handleLogout}
-          className="w-12 h-12 flex items-center justify-center rounded-xl text-red-600 hover:bg-red-50 transition"
+          className="flex h-12 w-12 items-center justify-center rounded-xl text-red-600 transition hover:bg-red-50"
           title="Sair"
         >
           <LogOut size={24} />
