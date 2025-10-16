@@ -25,10 +25,11 @@ export const login = async (req: Request, res: Response) => {
       data: { status: 'ONLINE' }
     });
 
+    const expiresIn = process.env.JWT_EXPIRES_IN || '8h';
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+      { expiresIn }
     );
 
     const { password: _, ...userWithoutPassword } = user;
