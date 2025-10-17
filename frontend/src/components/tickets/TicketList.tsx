@@ -30,6 +30,34 @@ const PRIORITY_OPTIONS = [
 
 const CAR_PLATE_REGEX = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
 
+type ContactMatch = {
+  id: string;
+  name: string;
+  phoneNumber: string;
+};
+
+type ApiErrorResponse = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const apiError = error as ApiErrorResponse;
+    const responseMessage = apiError.response?.data?.error;
+    if (responseMessage) return responseMessage;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'PENDING':
@@ -177,10 +205,8 @@ export default function TicketList() {
     }
 
     try {
-      const response = await api.get('/contacts', { params: { search: digits } });
-      const match = Array.isArray(response.data)
-        ? response.data.find((contact: any) => contact.phoneNumber === digits)
-        : null;
+      const response = await api.get<ContactMatch[]>('/contacts', { params: { search: digits } });
+      const match = response.data.find((contact) => contact.phoneNumber === digits);
 
       if (match) {
         setMatchedContactName(match.name);
@@ -241,9 +267,8 @@ export default function TicketList() {
 
       toast.success('Ticket criado com sucesso');
       closeCreateModal();
-    } catch (error: any) {
-      const message = error?.response?.data?.error || 'Erro ao criar ticket';
-      setManualError(message);
+    } catch (error) {
+      setManualError(getApiErrorMessage(error, 'Erro ao criar ticket'));
     } finally {
       setManualLoading(false);
     }
@@ -251,7 +276,7 @@ export default function TicketList() {
 
   return (
     <>
-      <div className="flex w-96 flex-col border-r border-gray-200 bg-white">
+      <div className="flex w-[420px] flex-col border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
           <div className="mb-4 flex items-center justify-between">
             <div>

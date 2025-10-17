@@ -57,6 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       initSocket(token);
       set({ user: response.data, token, isAuthenticated: true });
     } catch (error) {
+      console.error('Erro ao carregar usuario autenticado:', error);
       localStorage.removeItem('token');
       set({ user: null, token: null, isAuthenticated: false });
     }

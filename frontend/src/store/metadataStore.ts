@@ -13,6 +13,9 @@ export interface Queue {
   name: string;
   color: string;
   priority: number;
+  description?: string | null;
+  greetingMessage?: string | null;
+  outOfHoursMessage?: string | null;
 }
 
 export interface QuickReply {
@@ -63,7 +66,28 @@ interface MetadataState {
   fetchQuickReplies: () => Promise<void>;
   fetchConnections: () => Promise<void>;
   fetchDashboard: () => Promise<void>;
+  createQueue: (payload: {
+    name: string;
+    color?: string;
+    description?: string;
+    greetingMessage?: string;
+    outOfHoursMessage?: string;
+    priority?: number;
+    userIds?: string[];
+  }) => Promise<void>;
   createTag: (payload: { name: string; color?: string }) => Promise<void>;
+  updateQueue: (id: string, payload: {
+    name?: string;
+    color?: string;
+    description?: string;
+    greetingMessage?: string;
+    outOfHoursMessage?: string;
+    priority?: number;
+    userIds?: string[];
+  }) => Promise<void>;
+  updateTag: (id: string, payload: { name?: string; color?: string }) => Promise<void>;
+  deleteQueue: (id: string) => Promise<void>;
+  deleteTag: (id: string) => Promise<void>;
   createConnection: (payload: { name: string; isDefault?: boolean }) => Promise<void>;
   startConnection: (id: string) => Promise<void>;
   stopConnection: (id: string) => Promise<void>;
@@ -128,12 +152,23 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
     }
   },
 
+  createQueue: async (payload) => {
+    try {
+      await api.post('/queues', payload);
+      await get().fetchQueues();
+    } catch (error) {
+      console.error('Erro ao criar fila:', error);
+      throw error;
+    }
+  },
+
   createTag: async ({ name, color }) => {
     try {
       await api.post('/tags', { name, color });
       await get().fetchTags();
     } catch (error) {
       console.error('Erro ao criar tag:', error);
+      throw error;
     }
   },
 
@@ -143,6 +178,7 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       await get().fetchConnections();
     } catch (error) {
       console.error('Erro ao criar conexao WhatsApp:', error);
+      throw error;
     }
   },
 
@@ -152,6 +188,7 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       await get().fetchConnections();
     } catch (error) {
       console.error('Erro ao iniciar conexao WhatsApp:', error);
+      throw error;
     }
   },
 
@@ -161,6 +198,7 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       await get().fetchConnections();
     } catch (error) {
       console.error('Erro ao parar conexao WhatsApp:', error);
+      throw error;
     }
   },
 
@@ -170,6 +208,47 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       await get().fetchConnections();
     } catch (error) {
       console.error('Erro ao remover conexao WhatsApp:', error);
+      throw error;
+    }
+  },
+
+  updateQueue: async (id, payload) => {
+    try {
+      await api.put(`/queues/${id}`, payload);
+      await get().fetchQueues();
+    } catch (error) {
+      console.error('Erro ao atualizar fila:', error);
+      throw error;
+    }
+  },
+
+  updateTag: async (id, payload) => {
+    try {
+      await api.put(`/tags/${id}`, payload);
+      await get().fetchTags();
+    } catch (error) {
+      console.error('Erro ao atualizar tag:', error);
+      throw error;
+    }
+  },
+
+  deleteQueue: async (id) => {
+    try {
+      await api.delete(`/queues/${id}`);
+      await get().fetchQueues();
+    } catch (error) {
+      console.error('Erro ao remover fila:', error);
+      throw error;
+    }
+  },
+
+  deleteTag: async (id) => {
+    try {
+      await api.delete(`/tags/${id}`);
+      await get().fetchTags();
+    } catch (error) {
+      console.error('Erro ao remover tag:', error);
+      throw error;
     }
   },
 

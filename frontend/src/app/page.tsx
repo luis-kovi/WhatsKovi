@@ -1,22 +1,27 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, loadUser } = useAuthStore();
+  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    loadUser().then(() => {
-      if (isAuthenticated) {
-        router.push('/dashboard');
-      } else {
-        router.push('/login');
-      }
-    });
-  }, []);
+    const initialize = async () => {
+      await loadUser();
+      setInitializing(false);
+    };
+
+    void initialize();
+  }, [loadUser]);
+
+  useEffect(() => {
+    if (initializing) return;
+    router.replace(isAuthenticated ? '/dashboard' : '/login');
+  }, [initializing, isAuthenticated, router]);
 
   return (
     <div className="flex items-center justify-center min-h-screen">

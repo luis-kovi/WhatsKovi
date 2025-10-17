@@ -11,6 +11,20 @@ export interface TicketTag {
   };
 }
 
+export interface TicketMessage {
+  id: string;
+  body: string | null;
+  createdAt: string;
+  isPrivate?: boolean;
+  mediaUrl?: string | null;
+  userId?: string | null;
+  user?: {
+    id: string;
+    name: string;
+    avatar?: string | null;
+  } | null;
+}
+
 export interface Ticket {
   id: string;
   status: string;
@@ -35,7 +49,7 @@ export interface Ticket {
     color: string;
   } | null;
   tags: TicketTag[];
-  messages?: any[];
+  messages?: TicketMessage[];
 }
 
 type TicketSort = 'recent' | 'unread' | 'priority';
@@ -47,6 +61,16 @@ export interface TicketFilters {
   search?: string;
   sort?: TicketSort;
 }
+
+type TransferPayload = {
+  userId?: string | null;
+  queueId?: string | null;
+};
+
+type MessageEventPayload = {
+  ticketId: string;
+  userId?: string | null;
+};
 
 interface TicketState {
   tickets: Ticket[];
@@ -60,7 +84,7 @@ interface TicketState {
   acceptTicket: (ticketId: string) => Promise<void>;
   closeTicket: (ticketId: string) => Promise<void>;
   reopenTicket: (ticketId: string) => Promise<void>;
-  transferTicket: (ticketId: string, data: any) => Promise<void>;
+  transferTicket: (ticketId: string, data: TransferPayload) => Promise<void>;
   updateTicketDetails: (ticketId: string, data: { priority?: string; queueId?: string | null; tagIds?: string[] }) => Promise<void>;
   createManualTicket: (payload: {
     phoneNumber: string;
@@ -94,7 +118,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
     set({ loading: true, filters: currentFilters });
 
     try {
-      const response = await api.get('/tickets', {
+      const response = await api.get<Ticket[]>('/tickets', {
         params: serializeFilters(currentFilters)
       });
 
@@ -127,7 +151,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   selectTicket: async (ticketId: string) => {
     try {
-      const response = await api.get(`/tickets/${ticketId}`);
+      const response = await api.get<Ticket>(`/tickets/${ticketId}`);
       const ticket = response.data;
 
       set((state) => ({
@@ -143,7 +167,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   acceptTicket: async (ticketId: string) => {
     try {
-      const response = await api.put(`/tickets/${ticketId}/accept`);
+      const response = await api.put<Ticket>(`/tickets/${ticketId}/accept`);
       const updatedTicket: Ticket = response.data;
 
       set((state) => ({
@@ -160,7 +184,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   closeTicket: async (ticketId: string) => {
     try {
-      const response = await api.put(`/tickets/${ticketId}/close`);
+      const response = await api.put<Ticket>(`/tickets/${ticketId}/close`);
       const updatedTicket: Ticket = response.data;
 
       set((state) => ({
@@ -175,7 +199,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   reopenTicket: async (ticketId: string) => {
     try {
-      const response = await api.put(`/tickets/${ticketId}/reopen`);
+      const response = await api.put<Ticket>(`/tickets/${ticketId}/reopen`);
       const updatedTicket: Ticket = response.data;
 
       set((state) => ({
@@ -188,9 +212,9 @@ export const useTicketStore = create<TicketState>((set, get) => ({
     }
   },
 
-  transferTicket: async (ticketId: string, data: any) => {
+  transferTicket: async (ticketId: string, data: TransferPayload) => {
     try {
-      const response = await api.put(`/tickets/${ticketId}/transfer`, data);
+      const response = await api.put<Ticket>(`/tickets/${ticketId}/transfer`, data);
       const updatedTicket: Ticket = response.data;
 
       set((state) => ({
@@ -205,7 +229,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   updateTicketDetails: async (ticketId, data) => {
     try {
-      const response = await api.put(`/tickets/${ticketId}/details`, data);
+      const response = await api.put<Ticket>(`/tickets/${ticketId}/details`, data);
       const updatedTicket: Ticket = response.data;
 
       set((state) => ({
@@ -220,7 +244,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   createManualTicket: async (payload) => {
     try {
-      const response = await api.post('/tickets', payload);
+      const response = await api.post<Ticket>('/tickets', payload);
       const created: Ticket = response.data;
 
       set((state) => ({
@@ -255,7 +279,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
       }));
     });
 
-    socket.on('message:new', (payload: any) => {
+    socket.on('message:new', (payload: MessageEventPayload) => {
       set((state) => {
         const isFromAgent = Boolean(payload.userId);
         const now = new Date().toISOString();

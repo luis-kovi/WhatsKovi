@@ -13,6 +13,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getErrorMessage = (error: unknown) => {
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      const apiError = error as { response?: { data?: { error?: string } } };
+      if (apiError.response?.data?.error) {
+        return apiError.response.data.error;
+      }
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return 'Erro ao fazer login';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -21,8 +34,8 @@ export default function LoginPage() {
       await login(email, password);
       toast.success('Login realizado com sucesso!');
       router.push('/dashboard');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Erro ao fazer login');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

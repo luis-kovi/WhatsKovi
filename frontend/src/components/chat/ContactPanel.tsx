@@ -17,10 +17,10 @@ export default function ContactPanel() {
   useEffect(() => {
     if (selectedTicket) {
       loadContact(selectedTicket.contact.id);
-    } else {
-      clearSelected();
+      return;
     }
-  }, [selectedTicket?.contact.id]);
+    clearSelected();
+  }, [selectedTicket, loadContact, clearSelected]);
 
   useEffect(() => {
     setNotes(selectedContact?.notes || '');

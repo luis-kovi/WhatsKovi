@@ -1,6 +1,7 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTicketStore } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import {
@@ -46,6 +47,10 @@ type MessagePayload = {
     name: string;
     avatar?: string | null;
   } | null;
+};
+
+type SocketMessagePayload = MessagePayload & {
+  ticketId: string;
 };
 
 const getMediaType = (message: MessagePayload) => {
@@ -114,6 +119,25 @@ export default function ChatArea() {
     fetchQueues();
   }, [fetchTags, fetchQuickReplies, fetchQueues]);
 
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, []);
+
+  const loadMessages = useCallback(
+    async (ticketId: string) => {
+      try {
+        const response = await api.get<MessagePayload[]>(`/messages/${ticketId}`);
+        setMessages(response.data);
+        scrollToBottom();
+      } catch (error) {
+        console.error('Erro ao buscar mensagens:', error);
+      }
+    },
+    [scrollToBottom]
+  );
+
   useEffect(() => {
     if (!selectedTicket) {
       setMessages([]);
@@ -125,15 +149,16 @@ export default function ChatArea() {
     setShowTagManager(false);
     setShowQueueMenu(false);
     setIsPrivate(false);
-  }, [selectedTicket?.id]);
+  }, [selectedTicket, loadMessages]);
 
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
-    const handleIncoming = (payload: any) => {
-      if (payload.ticketId === selectedTicket?.id) {
-        setMessages((prev) => [...prev, payload]);
+    const handleIncoming = (payload: SocketMessagePayload) => {
+      const { ticketId: incomingTicketId, ...message } = payload;
+      if (incomingTicketId === selectedTicket?.id) {
+        setMessages((prev) => [...prev, message]);
         scrollToBottom();
       }
     };
@@ -142,23 +167,7 @@ export default function ChatArea() {
     return () => {
       socket.off('message:new', handleIncoming);
     };
-  }, [selectedTicket?.id]);
-
-  const loadMessages = async (ticketId: string) => {
-    try {
-      const response = await api.get(`/messages/${ticketId}`);
-      setMessages(response.data);
-      scrollToBottom();
-    } catch (error) {
-      console.error('Erro ao buscar mensagens:', error);
-    }
-  };
-
-  const scrollToBottom = () => {
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    });
-  };
+  }, [selectedTicket?.id, scrollToBottom]);
 
   const handleSendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -296,7 +305,16 @@ export default function ChatArea() {
     const mediaType = getMediaType(message);
 
     if (mediaType === 'image') {
-      return <img src={src} alt="Midia enviada" className="mt-2 max-h-64 w-full rounded-lg object-cover" />;
+      return (
+        <Image
+          src={src}
+          alt="Midia enviada"
+          width={400}
+          height={400}
+          className="mt-2 max-h-64 w-full rounded-lg object-cover"
+          unoptimized
+        />
+      );
     }
 
     if (mediaType === 'video') {
