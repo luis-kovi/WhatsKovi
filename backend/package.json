@@ -14,6 +14,10 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "overrides": {
+    "tar-fs": "^3.0.5",
+    "ws": "^8.17.1"
+  },
   "dependencies": {
     "@prisma/client": "^5.7.1",
     "bcryptjs": "^2.4.3",

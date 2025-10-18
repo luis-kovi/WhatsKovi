@@ -10,6 +10,30 @@ interface ContactTag {
   };
 }
 
+interface ContactNoteAuthor {
+  id: string;
+  name: string;
+  avatar?: string | null;
+}
+
+interface ContactNoteTicket {
+  id: string;
+  status: string;
+  queue?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+export interface ContactInternalNote {
+  id: string;
+  body: string;
+  type: string;
+  createdAt: string;
+  user?: ContactNoteAuthor | null;
+  ticket?: ContactNoteTicket | null;
+}
+
 interface Contact {
   id: string;
   name: string;
@@ -27,6 +51,7 @@ interface Contact {
       name: string;
     } | null;
   }>;
+  internalNotes?: ContactInternalNote[];
 }
 
 interface ContactState {
@@ -37,10 +62,15 @@ interface ContactState {
   loadContact: (contactId: string) => Promise<void>;
   updateContact: (
     contactId: string,
-    data: Partial<Omit<Contact, 'id' | 'tags' | 'tickets'>> & { tagIds?: string[] }
+    data: Partial<Omit<Contact, 'id' | 'tags' | 'tickets' | 'internalNotes'>> & { tagIds?: string[] }
   ) => Promise<void>;
   clearSelected: () => void;
 }
+
+const withNormalizedNotes = (contact: Contact): Contact => ({
+  ...contact,
+  internalNotes: contact.internalNotes ?? []
+});
 
 const serializeFilters = (filters?: { search?: string; tagIds?: string[] }) => ({
   search: filters?.search,
@@ -56,7 +86,12 @@ export const useContactStore = create<ContactState>((set) => ({
     set({ loading: true });
     try {
       const response = await api.get('/contacts', { params: serializeFilters(filters) });
-      set({ contacts: response.data, loading: false });
+      set({
+        contacts: Array.isArray(response.data)
+          ? response.data.map((contact: Contact) => withNormalizedNotes(contact))
+          : [],
+        loading: false
+      });
     } catch (error) {
       console.error('Erro ao carregar contatos:', error);
       set({ loading: false });
@@ -66,7 +101,7 @@ export const useContactStore = create<ContactState>((set) => ({
   loadContact: async (contactId) => {
     try {
       const response = await api.get(`/contacts/${contactId}`);
-      set({ selectedContact: response.data });
+      set({ selectedContact: withNormalizedNotes(response.data) });
     } catch (error) {
       console.error('Erro ao buscar contato:', error);
     }
@@ -78,8 +113,13 @@ export const useContactStore = create<ContactState>((set) => ({
       const updated = response.data;
 
       set((state) => ({
-        contacts: state.contacts.map((contact) => (contact.id === contactId ? updated : contact)),
-        selectedContact: state.selectedContact && state.selectedContact.id === contactId ? updated : state.selectedContact
+        contacts: state.contacts.map((contact) =>
+          contact.id === contactId ? withNormalizedNotes({ ...contact, ...updated }) : contact
+        ),
+        selectedContact:
+          state.selectedContact && state.selectedContact.id === contactId
+            ? withNormalizedNotes({ ...state.selectedContact, ...updated })
+            : state.selectedContact
       }));
     } catch (error) {
       console.error('Erro ao atualizar contato:', error);

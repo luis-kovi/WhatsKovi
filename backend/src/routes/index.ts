@@ -12,7 +12,14 @@ import {
   updateTicketDetails,
   exportTicket
 } from '../controllers/ticketController';
-import { sendMessage, listMessages } from '../controllers/messageController';
+import {
+  sendMessage,
+  listMessages,
+  updateMessage,
+  deleteMessage,
+  addReaction,
+  removeReaction
+} from '../controllers/messageController';
 import { listQueues, createQueue, updateQueue, deleteQueue } from '../controllers/queueController';
 import {
   listConnections,
@@ -60,6 +67,10 @@ router.put('/tickets/:id/details', authMiddleware, updateTicketDetails);
 // Message routes
 router.post('/messages', authMiddleware, upload.single('media'), sendMessage);
 router.get('/messages/:ticketId', authMiddleware, listMessages);
+router.put('/messages/:id', authMiddleware, updateMessage);
+router.delete('/messages/:id', authMiddleware, deleteMessage);
+router.post('/messages/:id/reactions', authMiddleware, addReaction);
+router.delete('/messages/:id/reactions/:reactionId', authMiddleware, removeReaction);
 
 // Queue routes
 router.get('/queues', authMiddleware, listQueues);

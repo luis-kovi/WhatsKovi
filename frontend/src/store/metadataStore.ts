@@ -1,6 +1,8 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import api from '../services/api';
 import { getSocket } from '../services/socket';
+
+const DEFAULT_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '👏'];
 
 export interface Tag {
   id: string;
@@ -61,6 +63,7 @@ interface MetadataState {
   connections: WhatsAppConnection[];
   dashboard: DashboardSummary | null;
   loading: boolean;
+  reactionPalette: string[];
   fetchTags: () => Promise<void>;
   fetchQueues: () => Promise<void>;
   fetchQuickReplies: () => Promise<void>;
@@ -93,6 +96,7 @@ interface MetadataState {
   stopConnection: (id: string) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   setupRealtimeListeners: () => void;
+  setReactionPalette: (palette: string[]) => void;
 }
 
 let realtimeBound = false;
@@ -104,6 +108,7 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
   connections: [],
   dashboard: null,
   loading: false,
+  reactionPalette: DEFAULT_REACTIONS,
 
   fetchTags: async () => {
     try {
@@ -202,6 +207,10 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
     }
   },
 
+  setReactionPalette: (palette) => {
+    set({ reactionPalette: palette.length > 0 ? palette : DEFAULT_REACTIONS });
+  },
+
   deleteConnection: async (id: string) => {
     try {
       await api.delete(`/whatsapp/${id}`);
@@ -291,3 +300,4 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
     });
   }
 }));
+

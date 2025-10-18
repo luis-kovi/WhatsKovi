@@ -63,6 +63,7 @@ model User {
   tickets           Ticket[]
   messages          Message[]
   queues            QueueUser[]
+  messageReactions  MessageReaction[]
   
   @@map("users")
 }
@@ -166,6 +167,8 @@ model Message {
   isPrivate         Boolean      @default(false)
   quotedMsgId       String?
   createdAt         DateTime     @default(now())
+  editedAt          DateTime?
+  editedBy          String?
   
   ticketId          String
   ticket            Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -173,7 +176,25 @@ model Message {
   userId            String?
   user              User?        @relation(fields: [userId], references: [id])
   
+  quotedMessage     Message?     @relation("MessageQuote", fields: [quotedMsgId], references: [id])
+  replies           Message[]    @relation("MessageQuote")
+  reactions         MessageReaction[]
+  
   @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  emoji     String
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
 }
 
 model Tag {

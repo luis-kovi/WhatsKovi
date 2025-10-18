@@ -90,6 +90,8 @@ npm run prisma:seed
 npm run dev
 ```
 
+> Sprint 2: rode `npm run prisma:migrate` sempre que atualizar para garantir que a migration `20251017090000_messages_enhancements` esteja aplicada. Consulte `CHANGELOG.md` para detalhes de rollback em bancos existentes.
+
 #### Frontend
 
 ```bash
@@ -163,6 +165,19 @@ Após executar o seed, você pode fazer login com:
 - Notificações de novos tickets
 - Indicador de digitação
 - Status online dos usuários
+
+## API de mensagens (Sprint 2)
+
+- `POST /api/messages` envia texto ou midia e aceita `quotedMsgId` para citar mensagens.
+- `PUT /api/messages/:id` edita corpo ou visibilidade e registra `editedAt`/`editedBy`.
+- `DELETE /api/messages/:id` remove mensagens, arquivos associados e emite `message:delete`.
+- `POST /api/messages/:id/reactions` cria ou atualiza reacoes com o campo `emoji`.
+- `DELETE /api/messages/:id/reactions/:reactionId` remove a reacao informada.
+
+Eventos Socket.IO relacionados:
+- `message:new` ao publicar uma mensagem.
+- `message:update` para edicoes e reacoes.
+- `message:delete` ao excluir mensagens.
 
 ## 📂 Estrutura do Projeto
 

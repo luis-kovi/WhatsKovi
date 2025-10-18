@@ -72,7 +72,49 @@ export const getContact = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Contato nao encontrado' });
     }
 
-    return res.json(contact);
+    const internalNotes = await prisma.message.findMany({
+      where: {
+        isPrivate: true,
+        ticket: {
+          contactId: id
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true
+          }
+        },
+        ticket: {
+          select: {
+            id: true,
+            status: true,
+            queue: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return res.json({
+      ...contact,
+      internalNotes: internalNotes.map((note) => ({
+        id: note.id,
+        body: note.body,
+        type: note.type,
+        createdAt: note.createdAt,
+        ticket: note.ticket,
+        user: note.user
+      }))
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar contato' });
   }
