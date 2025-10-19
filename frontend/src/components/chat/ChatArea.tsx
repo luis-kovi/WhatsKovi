@@ -1,15 +1,15 @@
-﻿'use client';
+'use client';
 
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import data from '@emoji-mart/data';
+import { format } from 'date-fns';
 import {
   Send,
   Paperclip,
   Smile,
-  MoreVertical,
   MessageSquare,
   Tag as TagIcon,
   StickyNote,
@@ -27,6 +27,8 @@ import { useMessages } from '@/hooks/useMessages';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuthStore } from '@/store/authStore';
 import { MessageItem } from '@/components/chat/MessageItem';
+import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
+import { useQuickReplyStore } from '@/store/quickReplyStore';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 
@@ -37,45 +39,208 @@ const PRIORITY_OPTIONS = [
   { value: 'URGENT', label: 'Urgente' }
 ];
 
+type MessageEditModalProps = {
+  message: TicketMessage;
+  value: string;
+  isPrivate: boolean;
+  canTogglePrivate: boolean;
+  submitting: boolean;
+  onChange: (value: string) => void;
+  onTogglePrivate: (value: boolean) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+};
+
+function MessageEditModal({
+  message,
+  value,
+  isPrivate,
+  canTogglePrivate,
+  submitting,
+  onChange,
+  onTogglePrivate,
+  onClose,
+  onConfirm
+}: MessageEditModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-10">
+      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Editar mensagem</h3>
+            <p className="text-sm text-gray-500">Atualize o conteudo ou a visibilidade desta mensagem.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <div>
+            <label className="text-xs font-semibold uppercase text-gray-500">Conteudo</label>
+            <textarea
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              rows={4}
+              className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="Atualize o texto da mensagem..."
+            />
+          </div>
+
+          {canTogglePrivate && (
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(event) => onTogglePrivate(event.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40"
+              />
+              Converter em nota interna (visivel apenas para a equipe)
+            </label>
+          )}
+
+          <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
+            <span>ID: {message.id.slice(0, 8)}...</span>
+            <span>{format(new Date(message.createdAt), 'dd/MM/yyyy HH:mm')}</span>
+          </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+                disabled={submitting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60"
+                disabled={submitting}
+              >
+                {submitting ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type MessageDeleteModalProps = {
+  message: TicketMessage;
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+};
+
+function MessageDeleteModal({ message, deleting, onClose, onConfirm }: MessageDeleteModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-10">
+      <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Remover mensagem</h3>
+            <p className="text-sm text-gray-500">A mensagem sera removida para todos os participantes.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+            <p className="font-semibold">Conteudo selecionado</p>
+            <p className="mt-2 whitespace-pre-wrap text-xs text-red-700">
+              {message.body || 'Mensagem sem texto (apenas midia)'}
+            </p>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            Esta ação nao pode ser desfeita. Arquivos anexos tambem serao excluidos do servidor.
+          </p>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+              disabled={deleting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-400"
+              disabled={deleting}
+            >
+              {deleting ? 'Removendo...' : 'Remover mensagem'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatArea() {
-  const currentUserId = useAuthStore((state) => state.user?.id);
+  const currentUser = useAuthStore((state) => state.user);
+  const currentUserId = currentUser?.id;
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const {
     selectedTicket,
     acceptTicket,
     closeTicket,
     reopenTicket,
-    updateTicketDetails
+    updateTicketDetails,
+    addTicketTags,
+    removeTicketTag
   } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
     acceptTicket: state.acceptTicket,
     closeTicket: state.closeTicket,
     reopenTicket: state.reopenTicket,
-    updateTicketDetails: state.updateTicketDetails
+    updateTicketDetails: state.updateTicketDetails,
+    addTicketTags: state.addTicketTags,
+    removeTicketTag: state.removeTicketTag
   }));
 
-  const {
-    tags,
-    quickReplies,
-    queues,
-    reactionPalette,
-    fetchTags,
-    fetchQuickReplies,
-    fetchQueues
-  } = useMetadataStore((state) => ({
+  const { tags, queues, reactionPalette, fetchTags, fetchQueues } = useMetadataStore((state) => ({
     tags: state.tags,
-    quickReplies: state.quickReplies,
     queues: state.queues,
     reactionPalette: state.reactionPalette,
     fetchTags: state.fetchTags,
-    fetchQuickReplies: state.fetchQuickReplies,
     fetchQueues: state.fetchQueues
+  }));
+
+  const {
+    quickReplies,
+    fetchQuickReplies: loadQuickReplies,
+    fetchVariables: loadQuickReplyVariables
+  } = useQuickReplyStore((state) => ({
+    quickReplies: state.quickReplies,
+    fetchQuickReplies: state.fetchQuickReplies,
+    fetchVariables: state.fetchVariables
   }));
 
   const {
     messages,
     isLoaded: messagesLoaded,
+    ensureLoaded,
     sendMessage: sendMessageAction,
+    editMessage: editMessageAction,
+    deleteMessage: deleteMessageAction,
     addReaction: addReactionAction,
     removeReaction: removeReactionAction,
     quotedMessage,
@@ -85,7 +250,7 @@ export default function ChatArea() {
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [isQuickReplyModalOpen, setQuickReplyModalOpen] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -93,6 +258,14 @@ export default function ChatArea() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<TicketMessage | null>(null);
+  const [editingBody, setEditingBody] = useState('');
+  const [editingPrivate, setEditingPrivate] = useState(false);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -104,6 +277,7 @@ export default function ChatArea() {
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shouldDiscardRecordingRef = useRef(false);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTagIds = useMemo(
     () => selectedTicket?.tags.map((relation) => relation.tag.id) ?? [],
@@ -118,9 +292,17 @@ export default function ChatArea() {
 
   useEffect(() => {
     fetchTags();
-    fetchQuickReplies();
     fetchQueues();
-  }, [fetchTags, fetchQuickReplies, fetchQueues]);
+    loadQuickReplyVariables();
+  }, [fetchTags, fetchQueues, loadQuickReplyVariables]);
+
+  useEffect(() => {
+    if (!selectedTicket) return;
+    loadQuickReplies({
+      queueId: selectedTicket.queue?.id,
+      scope: 'available'
+    });
+  }, [selectedTicket, loadQuickReplies]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -147,6 +329,17 @@ export default function ChatArea() {
   }, [showEmojiPicker]);
 
   useEffect(() => {
+    if (!activeMenuMessageId) return;
+
+    const handleClickOutside = () => {
+      setActiveMenuMessageId(null);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenuMessageId]);
+
+  useEffect(() => {
     return () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         shouldDiscardRecordingRef.current = true;
@@ -155,6 +348,9 @@ export default function ChatArea() {
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
+      }
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
       }
     };
   }, []);
@@ -211,6 +407,32 @@ export default function ChatArea() {
       mediaStreamRef.current = null;
     }
   };
+
+  const focusMessage = useCallback(
+    (messageId: string) => {
+      const attemptFocus = (retries = 0) => {
+        const element = document.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+        if (!element) {
+          if (retries < 5) {
+            setTimeout(() => attemptFocus(retries + 1), 120);
+          }
+          return;
+        }
+
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageId);
+        if (highlightTimeoutRef.current) {
+          clearTimeout(highlightTimeoutRef.current);
+        }
+        highlightTimeoutRef.current = setTimeout(() => {
+          setHighlightedMessageId((current) => (current === messageId ? null : current));
+        }, 2200);
+      };
+
+      attemptFocus();
+    },
+    []
+  );
 
   const stopRecording = useCallback(
     (discard = false) => {
@@ -327,7 +549,7 @@ export default function ChatArea() {
       });
       setNewMessage('');
       setShowEmojiPicker(false);
-      setShowQuickReplies(false);
+      setQuickReplyModalOpen(false);
       if (isPrivate) {
         toast.success('Nota interna criada');
       } else {
@@ -344,8 +566,26 @@ export default function ChatArea() {
   const handleFileButtonClick = () => {
     if (!selectedTicket) return;
     setShowEmojiPicker(false);
-    setShowQuickReplies(false);
+    setQuickReplyModalOpen(false);
     fileInputRef.current?.click();
+  };
+
+  const handleTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key === '/' &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      const { selectionStart } = event.currentTarget;
+      const textBefore = event.currentTarget.value.slice(0, selectionStart);
+      if (textBefore.trim().length === 0) {
+        event.preventDefault();
+        setQuickReplyModalOpen(true);
+        setShowEmojiPicker(false);
+      }
+    }
   };
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -365,7 +605,7 @@ export default function ChatArea() {
       });
       setNewMessage('');
       setShowEmojiPicker(false);
-      setShowQuickReplies(false);
+      setQuickReplyModalOpen(false);
       toast.success(isPrivate ? 'Nota interna anexada' : 'Arquivo enviado');
     } catch (error) {
       console.error('Erro ao enviar arquivo:', error);
@@ -411,18 +651,109 @@ export default function ChatArea() {
 
   const handleToggleTag = async (tagId: string) => {
     if (!selectedTicket) return;
-    const nextTags = activeTagIds.includes(tagId)
-      ? activeTagIds.filter((id) => id !== tagId)
-      : [...activeTagIds, tagId];
 
-    await updateTicketDetails(selectedTicket.id, { tagIds: nextTags });
-    toast.success('Tags atualizadas');
+    try {
+      if (activeTagIds.includes(tagId)) {
+        await removeTicketTag(selectedTicket.id, tagId);
+        toast.success('Tag removida do atendimento');
+      } else {
+        await addTicketTags(selectedTicket.id, [tagId]);
+        toast.success('Tag aplicada ao atendimento');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar tags do ticket:', error);
+      toast.error('Nao foi possivel atualizar as tags.');
+    }
   };
 
   const handleInsertQuickReply = (message: string) => {
     setNewMessage((current) => (current ? `${current}\n${message}` : message));
-    setShowQuickReplies(false);
+    setQuickReplyModalOpen(false);
     setShowEmojiPicker(false);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  };
+
+  const handleToggleMessageMenu = (messageId: string) => {
+    setActiveMenuMessageId((current) => (current === messageId ? null : messageId));
+  };
+
+  const handleJumpToMessage = (messageId: string) => {
+    ensureLoaded()
+      .catch(() => undefined)
+      .finally(() => focusMessage(messageId));
+  };
+
+  const handleRequestEdit = (message: TicketMessage) => {
+    if (!message.body || !['TEXT', 'NOTE'].includes(message.type)) {
+      toast.error('Apenas mensagens de texto podem ser editadas.');
+      return;
+    }
+
+    setEditingMessage(message);
+    setEditingBody(message.body ?? '');
+    setEditingPrivate(Boolean(message.isPrivate));
+    setActiveMenuMessageId(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditingBody('');
+    setEditingPrivate(false);
+    setIsSubmittingEdit(false);
+  };
+
+  const handleSubmitEdit = async () => {
+    if (!editingMessage) return;
+    const trimmed = editingBody.trim();
+
+    if (!trimmed) {
+      toast.error('Informe o novo conteudo da mensagem.');
+      return;
+    }
+
+    setIsSubmittingEdit(true);
+    try {
+      await editMessageAction({
+        messageId: editingMessage.id,
+        body: trimmed,
+        isPrivate: editingMessage.type === 'NOTE' ? true : editingPrivate
+      });
+      toast.success('Mensagem atualizada.');
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Erro ao editar mensagem:', error);
+      toast.error('Falha ao editar mensagem.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleRequestDelete = (message: TicketMessage) => {
+    setMessageToDelete(message);
+    setActiveMenuMessageId(null);
+  };
+
+  const handleCancelDelete = () => {
+    setMessageToDelete(null);
+    setIsDeleting(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!messageToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteMessageAction(messageToDelete.id);
+      toast.success('Mensagem removida.');
+      handleCancelDelete();
+    } catch (error) {
+      console.error('Erro ao remover mensagem:', error);
+      toast.error('Falha ao remover mensagem.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleExportConversation = async () => {
@@ -449,6 +780,9 @@ export default function ChatArea() {
 
   const handleQuoteMessage = (message: TicketMessage) => {
     setQuotedMessage(message);
+    setActiveMenuMessageId(null);
+    setShowEmojiPicker(false);
+    setQuickReplyModalOpen(false);
   };
 
   const handleCancelQuote = () => {
@@ -599,9 +933,6 @@ export default function ChatArea() {
             </button>
           )}
 
-          <button className='flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100'>
-            <MoreVertical size={18} />
-          </button>
         </div>
       </div>
 
@@ -619,6 +950,14 @@ export default function ChatArea() {
           messages.map((message) => {
             const isFromAgent = Boolean(message.userId);
             const author = message.user?.name ?? selectedTicket.contact.name;
+            const isOwner = Boolean(message.userId && message.userId === currentUserId);
+            const canModify = isOwner || Boolean(isAdmin);
+            const hasBody = Boolean(message.body && message.body.trim().length > 0);
+            const isTextual = hasBody && ['TEXT', 'NOTE'].includes(message.type);
+            const canEdit = Boolean(canModify && isTextual);
+            const canDelete = Boolean(canModify);
+            const isMenuOpen = activeMenuMessageId === message.id;
+            const isHighlighted = highlightedMessageId === message.id;
 
             return (
               <MessageItem
@@ -631,6 +970,14 @@ export default function ChatArea() {
                 reactionPalette={reactionPalette}
                 onQuote={handleQuoteMessage}
                 onToggleReaction={handleToggleReaction}
+                onToggleMenu={handleToggleMessageMenu}
+                onJumpToMessage={handleJumpToMessage}
+                onEdit={handleRequestEdit}
+                onDelete={handleRequestDelete}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                isMenuOpen={isMenuOpen}
+                isHighlighted={isHighlighted}
               />
             );
           })
@@ -698,30 +1045,6 @@ export default function ChatArea() {
             </div>
           </div>
         )}
-
-        {showQuickReplies && (
-          <div className='mb-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl'>
-            <p className='text-xs font-semibold uppercase text-gray-500'>Respostas rapidas</p>
-            <div className='mt-2 max-h-60 space-y-2 overflow-y-auto'>
-              {quickReplies.length === 0 ? (
-                <p className='text-xs text-gray-500'>Nenhuma resposta configurada.</p>
-              ) : (
-                quickReplies.map((reply) => (
-                  <button
-                    key={reply.id}
-                    type='button'
-                    onClick={() => handleInsertQuickReply(reply.message)}
-                    className='w-full rounded-xl border border-gray-200 px-3 py-2 text-left text-xs text-gray-700 transition hover:border-primary hover:bg-primary/5'
-                  >
-                    <span className='block font-semibold text-primary'>{reply.shortcut}</span>
-                    <span className='mt-1 block'>{reply.message}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
         {quotedMessage && (
           <div className='mb-3 flex items-start justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-primary'>
             <div className='pr-4'>
@@ -795,7 +1118,7 @@ export default function ChatArea() {
               ref={emojiButtonRef}
               onClick={() => {
                 setShowEmojiPicker((prev) => !prev);
-                setShowQuickReplies(false);
+                setQuickReplyModalOpen(false);
               }}
               className={`flex h-11 w-11 items-center justify-center rounded-lg border text-gray-500 transition ${
                 showEmojiPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:bg-gray-100'
@@ -839,6 +1162,7 @@ export default function ChatArea() {
               ref={textareaRef}
               value={newMessage}
               onChange={(event) => setNewMessage(event.target.value)}
+              onKeyDown={(event) => handleTextareaKeyDown(event)}
               rows={isPrivate ? 4 : 3}
               placeholder={isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'}
               className='w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30'
@@ -846,12 +1170,17 @@ export default function ChatArea() {
             <button
               type='button'
               onClick={() => {
-                setShowQuickReplies((prev) => !prev);
+                setQuickReplyModalOpen(true);
                 setShowEmojiPicker(false);
               }}
               className='absolute right-3 top-3 inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-100'
             >
               Respostas
+              {quickReplies.length > 0 && (
+                <span className='rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary'>
+                  {quickReplies.length}
+                </span>
+              )}
               <ChevronDown size={12} />
             </button>
           </div>
@@ -867,6 +1196,37 @@ export default function ChatArea() {
 
         <input ref={fileInputRef} type='file' className='hidden' onChange={handleFileUpload} />
       </div>
-    </div>
-  );
+
+      {editingMessage && (
+        <MessageEditModal
+          message={editingMessage}
+          value={editingBody}
+          isPrivate={editingPrivate}
+          canTogglePrivate={editingMessage.type === 'TEXT'}
+          submitting={isSubmittingEdit}
+          onChange={setEditingBody}
+          onTogglePrivate={setEditingPrivate}
+          onClose={handleCancelEdit}
+          onConfirm={handleSubmitEdit}
+        />
+      )}
+
+      {messageToDelete && (
+      <MessageDeleteModal
+        message={messageToDelete}
+        deleting={isDeleting}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+      />
+    )}
+
+    <QuickReplyModal
+      open={isQuickReplyModalOpen}
+      onClose={() => setQuickReplyModalOpen(false)}
+      ticketId={selectedTicket?.id}
+      queueId={selectedTicket?.queue?.id ?? null}
+      onInsert={handleInsertQuickReply}
+    />
+  </div>
+);
 }

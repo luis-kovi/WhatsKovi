@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import prisma from "../config/database";
 import { AuthRequest } from "../middleware/auth";
 import { sendWhatsAppMessage } from "../services/whatsappService";
+import { applyAutomaticTagsToTicket } from "../services/tagAutomation";
 import { io } from "../server";
 import { MessageType } from "@prisma/client";
 
@@ -120,6 +121,11 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    await prisma.contact.update({
+      where: { id: ticket.contactId },
+      data: { lastInteractionAt: new Date() }
+    });
+
     let finalMessage = message;
 
     if (!isPrivate && ticket.whatsapp) {
@@ -138,6 +144,10 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
         data: { status: "SENT" },
         include: messageInclude
       });
+    }
+
+    if (!isPrivate) {
+      await applyAutomaticTagsToTicket(ticketId, finalMessage.body ?? "");
     }
 
     io.emit("message:new", { ...finalMessage, ticketId });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuthStore } from '@/store/authStore';
-import { MessageSquare, Users, Settings, LogOut, BarChart3 } from 'lucide-react';
+import { MessageSquare, Users, Settings, LogOut, BarChart3, UserCog } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 
 const baseNav = [
@@ -9,13 +9,18 @@ const baseNav = [
     label: 'Atendimentos',
     icon: MessageSquare,
     href: '/dashboard'
+  },
+  {
+    label: 'Contatos',
+    icon: Users,
+    href: '/dashboard/contacts'
   }
 ];
 
 const adminNav = [
   {
     label: 'Usuarios',
-    icon: Users,
+    icon: UserCog,
     href: '/dashboard/users'
   },
   {

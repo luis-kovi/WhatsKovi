@@ -10,6 +10,7 @@ import IntegrationSettings from '@/components/settings/IntegrationSettings';
 import WhatsAppConnectionsSection from '@/components/settings/WhatsAppConnectionsSection';
 import QueueSettingsSection from '@/components/settings/QueueSettingsSection';
 import TagSettingsSection from '@/components/settings/TagSettingsSection';
+import { QuickReplySettingsSection } from '@/components/settings/QuickReplySettingsSection';
 import { useAuthStore } from '@/store/authStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useRouter } from 'next/navigation';
@@ -204,11 +205,14 @@ export default function SettingsPage() {
     await deleteQueue(id);
   };
 
-  const handleCreateTag = async (payload: { name: string; color?: string }) => {
+  const handleCreateTag = async (payload: { name: string; color?: string; keywords?: string[] }) => {
     await createTag(payload);
   };
 
-  const handleUpdateTag = async (id: string, payload: { name?: string; color?: string }) => {
+  const handleUpdateTag = async (
+    id: string,
+    payload: { name?: string; color?: string; keywords?: string[] }
+  ) => {
     await updateTag(id, payload);
   };
 
@@ -295,9 +299,11 @@ export default function SettingsPage() {
           <TagSettingsSection
             tags={tags}
             onCreateTag={handleCreateTag}
-            onUpdateTag={handleUpdateTag}
-            onDeleteTag={handleDeleteTag}
-          />
+          onUpdateTag={handleUpdateTag}
+          onDeleteTag={handleDeleteTag}
+        />
+
+          <QuickReplySettingsSection />
 
           <IntegrationSettings
             token={apiToken}

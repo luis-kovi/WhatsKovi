@@ -123,6 +123,40 @@ async function main() {
   });
   console.log('Tags criadas');
 
+  const tagKeywordMap: Record<string, string[]> = {
+    Urgente: ['urgente', 'prioridade', 'imediato', 'emergencia'],
+    Duvida: ['duvida', 'dúvida', 'pergunta', 'informacao', 'informação'],
+    Reclamacao: ['reclamacao', 'reclamação', 'problema', 'erro', 'defeito'],
+    Elogio: ['elogio', 'obrigado', 'satisfeito', 'parabens', 'parabéns']
+  };
+
+  const seededTags = await prisma.tag.findMany({
+    where: {
+      name: {
+        in: Object.keys(tagKeywordMap)
+      }
+    },
+    select: {
+      id: true,
+      name: true
+    }
+  });
+
+  const keywordEntries = seededTags.flatMap((tag) =>
+    (tagKeywordMap[tag.name] || []).map((keyword) => ({
+      tagId: tag.id,
+      keyword
+    }))
+  );
+
+  if (keywordEntries.length > 0) {
+    await prisma.tagKeyword.createMany({
+      data: keywordEntries,
+      skipDuplicates: true
+    });
+    console.log('Palavras-chave das tags configuradas');
+  }
+
   // Quick replies
   await prisma.quickReply.createMany({
     data: [

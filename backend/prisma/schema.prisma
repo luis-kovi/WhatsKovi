@@ -64,6 +64,10 @@ model User {
   messages          Message[]
   queues            QueueUser[]
   messageReactions  MessageReaction[]
+  quickReplies      QuickReply[]        @relation("UserQuickReplies")
+  quickReplyUsages  QuickReplyUsage[]   @relation("UserQuickReplyUsage")
+  contactNotes      ContactNote[]       @relation("UserContactNotes")
+  contactSegments   ContactSegment[]    @relation("UserContactSegments")
   
   @@map("users")
 }
@@ -91,11 +95,15 @@ model Contact {
   avatar            String?
   isBlocked         Boolean      @default(false)
   notes             String?
+  customFields      Json?
+  lastInteractionAt DateTime?    @default(now())
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   
   tickets           Ticket[]
   tags              ContactTag[]
+  customFieldValues ContactFieldValue[]
+  notesHistory      ContactNote[]
   
   @@map("contacts")
 }
@@ -113,6 +121,8 @@ model Queue {
   
   tickets           Ticket[]
   users             QueueUser[]
+  quickReplies      QuickReply[]        @relation("QueueQuickReplies")
+  quickReplyUsages  QuickReplyUsage[]   @relation("QueueQuickReplyUsage")
   
   @@map("queues")
 }
@@ -154,6 +164,7 @@ model Ticket {
   
   messages          Message[]
   tags              TicketTag[]
+  quickReplyUsages  QuickReplyUsage[]   @relation("TicketQuickReplyUsage")
   
   @@map("tickets")
 }
@@ -206,6 +217,7 @@ model Tag {
   
   tickets           TicketTag[]
   contacts          ContactTag[]
+  keywords          TagKeyword[]
   
   @@map("tags")
 }
@@ -234,14 +246,146 @@ model ContactTag {
   @@map("contact_tags")
 }
 
+enum ContactFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+}
+
+model ContactField {
+  id          String            @id @default(uuid())
+  name        String
+  key         String            @unique
+  type        ContactFieldType  @default(TEXT)
+  description String?
+  options     String[]      @default([])
+  isRequired  Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  values      ContactFieldValue[]
+
+  @@map("contact_fields")
+}
+
+model ContactFieldValue {
+  id        String       @id @default(uuid())
+  contactId String
+  fieldId   String
+  value     String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  field     ContactField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, fieldId])
+  @@map("contact_field_values")
+}
+
+model ContactNote {
+  id        String   @id @default(uuid())
+  contactId String
+  userId    String?
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user      User?    @relation("UserContactNotes", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([contactId])
+  @@map("contact_notes")
+}
+
+model ContactSegment {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  filters      Json
+  isFavorite   Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdBy    User?    @relation("UserContactSegments", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@map("contact_segments")
+}
+
 model QuickReply {
   id                String       @id @default(uuid())
   shortcut          String       @unique
   message           String
   mediaUrl          String?
   isGlobal          Boolean      @default(true)
+  usageCount        Int          @default(0)
+  lastUsedAt        DateTime?
+  ownerId           String?
+  queueId           String?
+  categoryId        String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
-  
+
+  owner             User?                @relation("UserQuickReplies", fields: [ownerId], references: [id], onDelete: SetNull)
+  queue             Queue?               @relation("QueueQuickReplies", fields: [queueId], references: [id], onDelete: SetNull)
+  category          QuickReplyCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  usages            QuickReplyUsage[]
+
   @@map("quick_replies")
+}
+
+model QuickReplyCategory {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  color       String?     @default("#2563EB")
+  displayOrder Int        @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  quickReplies QuickReply[]
+
+  @@map("quick_reply_categories")
+}
+
+model QuickReplyUsage {
+  id            String   @id @default(uuid())
+  quickReplyId  String
+  ticketId      String
+  userId        String?
+  queueId       String?
+  createdAt     DateTime @default(now())
+
+  quickReply    QuickReply @relation(fields: [quickReplyId], references: [id], onDelete: Cascade)
+  ticket        Ticket     @relation("TicketQuickReplyUsage", fields: [ticketId], references: [id], onDelete: Cascade)
+  user          User?      @relation("UserQuickReplyUsage", fields: [userId], references: [id], onDelete: SetNull)
+  queue         Queue?     @relation("QueueQuickReplyUsage", fields: [queueId], references: [id], onDelete: SetNull)
+
+  @@index([quickReplyId])
+  @@index([ticketId])
+  @@index([userId])
+  @@map("quick_reply_usage")
+}
+
+enum TagMatchType {
+  CONTAINS
+  EXACT
+  STARTS_WITH
+}
+
+model TagKeyword {
+  id        String       @id @default(uuid())
+  tagId     String
+  keyword   String
+  matchType TagMatchType @default(CONTAINS)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tagId, keyword])
+  @@map("tag_keywords")
 }

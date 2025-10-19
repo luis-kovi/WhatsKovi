@@ -8,6 +8,9 @@ export interface Tag {
   id: string;
   name: string;
   color: string;
+  keywords: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Queue {
@@ -18,14 +21,6 @@ export interface Queue {
   description?: string | null;
   greetingMessage?: string | null;
   outOfHoursMessage?: string | null;
-}
-
-export interface QuickReply {
-  id: string;
-  shortcut: string;
-  message: string;
-  mediaUrl?: string | null;
-  isGlobal: boolean;
 }
 
 export interface WhatsAppConnection {
@@ -59,14 +54,12 @@ export interface DashboardSummary {
 interface MetadataState {
   tags: Tag[];
   queues: Queue[];
-  quickReplies: QuickReply[];
   connections: WhatsAppConnection[];
   dashboard: DashboardSummary | null;
   loading: boolean;
   reactionPalette: string[];
   fetchTags: () => Promise<void>;
   fetchQueues: () => Promise<void>;
-  fetchQuickReplies: () => Promise<void>;
   fetchConnections: () => Promise<void>;
   fetchDashboard: () => Promise<void>;
   createQueue: (payload: {
@@ -78,7 +71,7 @@ interface MetadataState {
     priority?: number;
     userIds?: string[];
   }) => Promise<void>;
-  createTag: (payload: { name: string; color?: string }) => Promise<void>;
+  createTag: (payload: { name: string; color?: string; keywords?: string[] }) => Promise<void>;
   updateQueue: (id: string, payload: {
     name?: string;
     color?: string;
@@ -88,7 +81,7 @@ interface MetadataState {
     priority?: number;
     userIds?: string[];
   }) => Promise<void>;
-  updateTag: (id: string, payload: { name?: string; color?: string }) => Promise<void>;
+  updateTag: (id: string, payload: { name?: string; color?: string; keywords?: string[] }) => Promise<void>;
   deleteQueue: (id: string) => Promise<void>;
   deleteTag: (id: string) => Promise<void>;
   createConnection: (payload: { name: string; isDefault?: boolean }) => Promise<void>;
@@ -104,7 +97,6 @@ let realtimeBound = false;
 export const useMetadataStore = create<MetadataState>((set, get) => ({
   tags: [],
   queues: [],
-  quickReplies: [],
   connections: [],
   dashboard: null,
   loading: false,
@@ -113,7 +105,13 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
   fetchTags: async () => {
     try {
       const response = await api.get('/tags');
-      set({ tags: response.data });
+      const tags = Array.isArray(response.data)
+        ? response.data.map((tag: Tag) => ({
+            ...tag,
+            keywords: Array.isArray(tag.keywords) ? tag.keywords : []
+          }))
+        : [];
+      set({ tags });
     } catch (error) {
       console.error('Erro ao carregar tags:', error);
     }
@@ -125,15 +123,6 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       set({ queues: response.data });
     } catch (error) {
       console.error('Erro ao carregar filas:', error);
-    }
-  },
-
-  fetchQuickReplies: async () => {
-    try {
-      const response = await api.get('/quick-replies');
-      set({ quickReplies: response.data });
-    } catch (error) {
-      console.error('Erro ao carregar respostas rapidas:', error);
     }
   },
 
@@ -167,9 +156,9 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
     }
   },
 
-  createTag: async ({ name, color }) => {
+  createTag: async ({ name, color, keywords }) => {
     try {
-      await api.post('/tags', { name, color });
+      await api.post('/tags', { name, color, keywords });
       await get().fetchTags();
     } catch (error) {
       console.error('Erro ao criar tag:', error);

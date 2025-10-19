@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { Check, CheckCheck, CornerUpRight, Paperclip, StickyNote } from 'lucide-react';
+import { Check, CheckCheck, CornerUpRight, MoreVertical, Paperclip, Pencil, StickyNote, Trash2 } from 'lucide-react';
 
 import { resolveAssetUrl } from '@/utils/media';
 import type { MessageReaction, TicketMessage } from '@/store/ticketStore';
@@ -98,6 +98,14 @@ type MessageItemProps = {
   reactionPalette: string[];
   onQuote: (message: TicketMessage) => void;
   onToggleReaction: (message: TicketMessage, emoji: string) => void;
+  onToggleMenu?: (messageId: string) => void;
+  onEdit?: (message: TicketMessage) => void;
+  onDelete?: (message: TicketMessage) => void;
+  onJumpToMessage?: (messageId: string) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  isMenuOpen?: boolean;
+  isHighlighted?: boolean;
 };
 
 export function MessageItem({
@@ -108,7 +116,15 @@ export function MessageItem({
   isFromAgent,
   reactionPalette,
   onQuote,
-  onToggleReaction
+  onToggleReaction,
+  onToggleMenu,
+  onEdit,
+  onDelete,
+  onJumpToMessage,
+  canEdit = false,
+  canDelete = false,
+  isMenuOpen = false,
+  isHighlighted = false
 }: MessageItemProps) {
   const reactionGroups = groupReactions(message.reactions);
   const userReactions = new Set(
@@ -132,24 +148,47 @@ export function MessageItem({
     ? 'border-white/30 bg-white/10 text-white'
     : 'border-primary/10 bg-primary/5 text-primary';
 
+  const showMenuButton = (canEdit || canDelete) && Boolean(onToggleMenu);
+  const bubbleHighlightClass = isHighlighted
+    ? isDarkTheme
+      ? 'ring-2 ring-white/70 shadow-lg'
+      : 'ring-2 ring-primary/60 shadow-lg'
+    : '';
+
   return (
-    <div className={`flex ${isFromAgent ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex ${isFromAgent ? 'justify-end' : 'justify-start'}`} data-message-id={message.id}>
       <div
-        className={`group relative max-w-[70%] rounded-2xl px-4 py-3 shadow-sm transition ${bubbleBackgroundClass} ${bubbleBorderClass}`}
+        className={`group relative max-w-[70%] rounded-2xl px-4 py-3 shadow-sm transition ${bubbleBackgroundClass} ${bubbleBorderClass} ${bubbleHighlightClass}`}
         style={isPrivateNote ? { backgroundColor: '#f58a32' } : undefined}
       >
-        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide">
+        <div className="mb-1 flex items-start justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide">
           <span className={isDarkTheme ? 'text-white/80' : 'text-gray-500'}>{author}</span>
-          <button
-            type="button"
-            onClick={() => onQuote(message)}
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
-              isDarkTheme ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            <CornerUpRight size={12} />
-            Responder
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onQuote(message)}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
+                isDarkTheme ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <CornerUpRight size={12} />
+              Responder
+            </button>
+            {showMenuButton && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleMenu?.(message.id);
+                }}
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] transition ${
+                  isDarkTheme ? 'text-white/80 hover:bg-white/20' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <MoreVertical size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {isPrivateNote && (
@@ -163,13 +202,22 @@ export function MessageItem({
         )}
 
         {message.quotedMessage && (
-          <div className={`mb-2 rounded-lg border px-3 py-2 text-xs ${quoteClasses}`}>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (onJumpToMessage) {
+                onJumpToMessage(message.quotedMessage!.id);
+              }
+            }}
+            className={`mb-2 w-full rounded-lg border px-3 py-2 text-left text-xs transition ${quoteClasses} hover:opacity-80`}
+          >
             <p className="font-semibold">{message.quotedMessage.user?.name ?? contactName}</p>
             <p className="mt-1 opacity-80">
               {message.quotedMessage.body ||
                 (message.quotedMessage.mediaUrl ? 'Midia anexada' : 'Mensagem sem texto')}
             </p>
-          </div>
+          </button>
         )}
 
         {message.body && <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.body}</p>}
@@ -229,6 +277,40 @@ export function MessageItem({
                 {emoji}
               </button>
             ))}
+          </div>
+        )}
+
+        {showMenuButton && isMenuOpen && (
+          <div
+            className="absolute right-0 top-10 z-30 w-40 rounded-xl border border-gray-200 bg-white p-1 text-xs shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {canEdit && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEdit?.(message);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-600 transition hover:bg-gray-100"
+              >
+                <Pencil size={14} />
+                Editar mensagem
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete?.(message);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-600 transition hover:bg-red-50"
+              >
+                <Trash2 size={14} />
+                Excluir mensagem
+              </button>
+            )}
           </div>
         )}
       </div>

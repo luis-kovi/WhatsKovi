@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/database';
+import { computeDashboardMetrics, normalizeDashboardFilters } from '../services/dashboardMetricsService';
 
 export const getDashboardSummary = async (_req: Request, res: Response) => {
   try {
@@ -65,5 +66,27 @@ export const getDashboardSummary = async (_req: Request, res: Response) => {
     });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao carregar dashboard' });
+  }
+};
+
+export const getDashboardMetrics = async (req: Request, res: Response) => {
+  try {
+    const filters = normalizeDashboardFilters({
+      startDate: typeof req.query.startDate === 'string' ? req.query.startDate : undefined,
+      endDate: typeof req.query.endDate === 'string' ? req.query.endDate : undefined,
+      interval: typeof req.query.interval === 'string' ? req.query.interval : undefined,
+      queueId: typeof req.query.queueId === 'string' ? req.query.queueId : undefined,
+      userId: typeof req.query.userId === 'string' ? req.query.userId : undefined
+    });
+
+    const metrics = await computeDashboardMetrics(filters);
+    return res.json(metrics);
+  } catch (error) {
+    if (error instanceof Error && error.message.toLowerCase().includes('inválid')) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    console.error('Erro ao calcular métricas do dashboard:', error);
+    return res.status(500).json({ error: 'Erro ao calcular métricas do dashboard' });
   }
 };

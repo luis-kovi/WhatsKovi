@@ -1,5 +1,14 @@
 # Changelog
 
+## [Sprint 6] - 2025-10-18
+
+### Added
+- Bloco de citação passou a ser clicável: ao selecionar um quote, o chat rola e destaca a mensagem original temporariamente para facilitar o contexto.
+- Menu contextual por mensagem com ações de editar (modal dedicada) e excluir (confirmação), respeitando permissões de agentes e administradores.
+
+### Changed
+- Balões aplicam destaque visual quando recebem foco via citação, melhorando a navegação entre replies encadeadas.
+
 ## [Sprint 5] - 2025-10-18
 
 ### Added

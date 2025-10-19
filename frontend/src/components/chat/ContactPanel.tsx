@@ -333,14 +333,14 @@ export default function ContactPanel() {
 
               {selectedContact.tags.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedContact.tags.map((relation) => (
+                  {selectedContact.tags.map((tag) => (
                     <span
-                      key={relation.id}
+                      key={tag.id}
                       className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                      style={{ backgroundColor: `${relation.tag.color}1A`, color: relation.tag.color }}
+                      style={{ backgroundColor: `${tag.color}1A`, color: tag.color }}
                     >
                       <User className="h-3 w-3" />
-                      #{relation.tag.name}
+                      #{tag.name}
                     </span>
                   ))}
                 </div>

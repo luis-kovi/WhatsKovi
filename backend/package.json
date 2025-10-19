@@ -1,7 +1,7 @@
 {
   "name": "whatskovi-backend",
   "version": "1.0.0",
-  "description": "Backend para sistema de gestão de atendimentos WhatsApp",
+  "description": "Backend para sistema de gest\u00c3\u00a3o de atendimentos WhatsApp",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -29,7 +29,9 @@
     "socket.io": "^4.6.0",
     "whatsapp-web.js": "^1.23.0",
     "qrcode": "^1.5.3",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "csv-parse": "^5.5.4",
+    "json2csv": "^5.0.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

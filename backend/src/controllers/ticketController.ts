@@ -2,13 +2,15 @@ import { Response } from 'express';
 import prisma from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { io } from '../server';
-
-const ticketInclude = {
-  contact: true,
-  user: { select: { id: true, name: true, avatar: true } },
-  queue: true,
-  tags: { include: { tag: true } }
-} as const;
+import { ticketInclude } from '../utils/ticketInclude';
+import {
+  appendTagsToTicket,
+  removeTagFromTicket,
+  replaceTicketTags,
+  loadTicketForResponse,
+  InvalidTagError,
+  validateTagIdentifiers
+} from '../services/tagAutomation';
 
 export const listTickets = async (req: AuthRequest, res: Response) => {
   try {
@@ -281,16 +283,20 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const requestedTags = Array.isArray(tagIds) ? tagIds.filter(Boolean) : [];
+    const requestedTags = Array.isArray(tagIds)
+      ? tagIds
+          .filter((tagId): tagId is string => typeof tagId === 'string')
+          .map((tagId) => tagId.trim())
+          .filter(Boolean)
+      : [];
 
-    if (requestedTags.length > 0) {
-      const tags = await prisma.tag.findMany({
-        where: { id: { in: requestedTags } }
-      });
-
-      if (tags.length !== requestedTags.length) {
-        return res.status(400).json({ error: 'Uma ou mais tags sao invalidas' });
+    try {
+      await validateTagIdentifiers(requestedTags);
+    } catch (error) {
+      if (error instanceof InvalidTagError) {
+        return res.status(400).json({ error: error.message });
       }
+      throw error;
     }
 
     const connection =
@@ -313,13 +319,7 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
     });
 
     if (requestedTags.length > 0) {
-      await prisma.ticketTag.createMany({
-        data: requestedTags.map((tagId) => ({
-          ticketId: ticket.id,
-          tagId
-        })),
-        skipDuplicates: true
-      });
+      await appendTagsToTicket(ticket.id, requestedTags);
     }
 
     const fullTicket = await prisma.ticket.findUnique({
@@ -366,8 +366,11 @@ export const updateTicketDetails = async (req: AuthRequest, res: Response) => {
     if (priority) data.priority = priority;
     if (queueId !== undefined) data.queueId = queueId;
 
-    await prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length > 0) {
+    let tagsChanged = false;
+    const dataChanged = Object.keys(data).length > 0;
+
+    const ticket = await prisma.$transaction(async (tx) => {
+      if (dataChanged) {
         await tx.ticket.update({
           where: { id },
           data
@@ -375,34 +378,110 @@ export const updateTicketDetails = async (req: AuthRequest, res: Response) => {
       }
 
       if (Array.isArray(tagIds)) {
-        await tx.ticketTag.deleteMany({ where: { ticketId: id } });
+        const sanitizedTagIds = tagIds
+          .filter((tagId): tagId is string => typeof tagId === 'string')
+          .map((tagId) => tagId.trim())
+          .filter(Boolean);
 
-        if (tagIds.length > 0) {
-          await tx.ticketTag.createMany({
-            data: tagIds.map((tagId) => ({
-              ticketId: id,
-              tagId
-            })),
-            skipDuplicates: true
-          });
-        }
+        const result = await replaceTicketTags(id, sanitizedTagIds, tx);
+        tagsChanged = result.changed;
       }
-    });
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-      include: ticketInclude
+      return tx.ticket.findUnique({
+        where: { id },
+        include: ticketInclude
+      });
     });
 
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket nao encontrado' });
     }
 
-    io.emit('ticket:update', ticket);
+    if (dataChanged || tagsChanged) {
+      io.emit('ticket:update', ticket);
+    }
 
     return res.json(ticket);
   } catch (error) {
+    if (error instanceof InvalidTagError) {
+      return res.status(400).json({ error: error.message });
+    }
     return res.status(500).json({ error: 'Erro ao atualizar ticket' });
+  }
+};
+
+export const applyTicketTags = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { tagIds } = req.body as { tagIds?: string[] };
+
+    const sanitizedTagIds = Array.isArray(tagIds)
+      ? tagIds
+          .filter((tagId): tagId is string => typeof tagId === 'string')
+          .map((tagId) => tagId.trim())
+          .filter(Boolean)
+      : [];
+
+    if (sanitizedTagIds.length === 0) {
+      return res.status(400).json({ error: 'Informe pelo menos uma tag' });
+    }
+
+    const ticketExists = await prisma.ticket.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+
+    if (!ticketExists) {
+      return res.status(404).json({ error: 'Ticket nao encontrado' });
+    }
+
+    const { changed } = await appendTagsToTicket(id, sanitizedTagIds);
+    const ticket = await loadTicketForResponse(id);
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket nao encontrado' });
+    }
+
+    if (changed) {
+      io.emit('ticket:update', ticket);
+    }
+
+    return res.json(ticket);
+  } catch (error) {
+    if (error instanceof InvalidTagError) {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Erro ao aplicar tags ao ticket' });
+  }
+};
+
+export const removeTicketTag = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id, tagId } = req.params;
+
+    const ticketExists = await prisma.ticket.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+
+    if (!ticketExists) {
+      return res.status(404).json({ error: 'Ticket nao encontrado' });
+    }
+
+    const { changed } = await removeTagFromTicket(id, tagId);
+    const ticket = await loadTicketForResponse(id);
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket nao encontrado' });
+    }
+
+    if (changed) {
+      io.emit('ticket:update', ticket);
+    }
+
+    return res.json(ticket);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao remover tag do ticket' });
   }
 };
 

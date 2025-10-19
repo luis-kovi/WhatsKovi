@@ -6,8 +6,8 @@ import { Tag } from '@/store/metadataStore';
 
 type TagSettingsSectionProps = {
   tags: Tag[];
-  onCreateTag: (payload: { name: string; color?: string }) => Promise<void>;
-  onUpdateTag: (id: string, payload: { name?: string; color?: string }) => Promise<void>;
+  onCreateTag: (payload: { name: string; color?: string; keywords?: string[] }) => Promise<void>;
+  onUpdateTag: (id: string, payload: { name?: string; color?: string; keywords?: string[] }) => Promise<void>;
   onDeleteTag: (id: string) => Promise<void>;
 };
 
@@ -18,9 +18,26 @@ export default function TagSettingsSection({
   onDeleteTag
 }: TagSettingsSectionProps) {
   const [formOpen, setFormOpen] = useState(false);
-  const [formValues, setFormValues] = useState({ name: '', color: '#FF355A' });
+  const [formValues, setFormValues] = useState({ name: '', color: '#FF355A', keywords: '' });
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const parseKeywords = (value: string) => {
+    const items = value
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+    const uniques = new Map<string, string>();
+    items.forEach((item) => {
+      const signature = item.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      if (!uniques.has(signature)) {
+        uniques.set(signature, item);
+      }
+    });
+
+    return Array.from(uniques.values());
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -29,20 +46,23 @@ export default function TagSettingsSection({
       return;
     }
 
+    const keywordList = parseKeywords(formValues.keywords);
+
     setSubmitting(true);
     try {
       if (editingTagId) {
         await onUpdateTag(editingTagId, {
           name: formValues.name.trim(),
-          color: formValues.color
+          color: formValues.color,
+          keywords: keywordList
         });
         toast.success('Tag atualizada com sucesso.');
       } else {
-        await onCreateTag({ name: formValues.name.trim(), color: formValues.color });
+        await onCreateTag({ name: formValues.name.trim(), color: formValues.color, keywords: keywordList });
         toast.success('Tag criada com sucesso.');
       }
 
-      setFormValues({ name: '', color: '#FF355A' });
+      setFormValues({ name: '', color: '#FF355A', keywords: '' });
       setEditingTagId(null);
       setFormOpen(false);
     } catch (error) {
@@ -56,7 +76,7 @@ export default function TagSettingsSection({
   const handleCancel = () => {
     setFormOpen(false);
     setEditingTagId(null);
-    setFormValues({ name: '', color: '#FF355A' });
+    setFormValues({ name: '', color: '#FF355A', keywords: '' });
   };
 
   return (
@@ -105,6 +125,18 @@ export default function TagSettingsSection({
               />
             </label>
           </div>
+          <label className="mt-4 flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Palavras-chave
+            <input
+              value={formValues.keywords}
+              onChange={(event) => setFormValues((prev) => ({ ...prev, keywords: event.target.value }))}
+              className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="financeiro, renovacao, vip"
+            />
+            <span className="text-[11px] font-normal normal-case text-gray-400">
+              Separe por virgulas. Vamos aplicar a tag automaticamente quando uma dessas palavras aparecer.
+            </span>
+          </label>
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
@@ -135,21 +167,39 @@ export default function TagSettingsSection({
               key={tag.id}
               className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <span
-                  className="h-6 w-6 rounded-full border border-gray-200"
+                  className="mt-1 h-6 w-6 rounded-full border border-gray-200"
                   style={{ background: tag.color }}
                 />
-                <div>
+                <div className="space-y-1">
                   <h3 className="text-sm font-semibold text-gray-800">#{tag.name}</h3>
                   <p className="text-xs text-gray-500">{tag.color}</p>
+                  {tag.keywords.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {tag.keywords.map((keyword) => (
+                        <span
+                          key={`${tag.id}-${keyword}`}
+                          className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-600 shadow-sm"
+                        >
+                          #{keyword}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-gray-400">Sem palavras-chave vinculadas.</p>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setFormValues({ name: tag.name, color: tag.color });
+                    setFormValues({
+                      name: tag.name,
+                      color: tag.color,
+                      keywords: tag.keywords.join(', ')
+                    });
                     setEditingTagId(tag.id);
                     setFormOpen(true);
                   }}

@@ -4,6 +4,7 @@ import path from 'path';
 import qrcode from 'qrcode';
 import prisma from '../config/database';
 import { io } from '../server';
+import { applyAutomaticTagsToTicket } from './tagAutomation';
 
 interface WhatsAppClient {
   id: string;
@@ -224,6 +225,8 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
         unreadMessages: { increment: 1 }
       }
     });
+
+    await applyAutomaticTagsToTicket(ticket.id, prismaMessage.body ?? '');
 
     io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
   } catch (error) {

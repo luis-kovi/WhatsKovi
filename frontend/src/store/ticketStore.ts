@@ -131,6 +131,8 @@ interface TicketState {
     ticketId: string,
     data: { priority?: string; queueId?: string | null; tagIds?: string[] }
   ) => Promise<void>;
+  addTicketTags: (ticketId: string, tagIds: string[]) => Promise<void>;
+  removeTicketTag: (ticketId: string, tagId: string) => Promise<void>;
   createManualTicket: (payload: {
     phoneNumber: string;
     name?: string;
@@ -516,6 +518,38 @@ export const useTicketStore = create<TicketState>((set, get) => ({
       }));
     } catch (error) {
       console.error('Erro ao atualizar ticket:', error);
+    }
+  },
+
+  addTicketTags: async (ticketId, tagIds) => {
+    try {
+      const response = await api.post<RawTicket>(`/tickets/${ticketId}/tags`, { tagIds });
+      const updatedTicket = normalizeTicket(response.data);
+
+      set((state) => ({
+        tickets: state.tickets.map((ticket) => (ticket.id === ticketId ? updatedTicket : ticket)),
+        selectedTicket:
+          state.selectedTicket && state.selectedTicket.id === ticketId ? updatedTicket : state.selectedTicket
+      }));
+    } catch (error) {
+      console.error('Erro ao aplicar tags no ticket:', error);
+      throw error;
+    }
+  },
+
+  removeTicketTag: async (ticketId, tagId) => {
+    try {
+      const response = await api.delete<RawTicket>(`/tickets/${ticketId}/tags/${tagId}`);
+      const updatedTicket = normalizeTicket(response.data);
+
+      set((state) => ({
+        tickets: state.tickets.map((ticket) => (ticket.id === ticketId ? updatedTicket : ticket)),
+        selectedTicket:
+          state.selectedTicket && state.selectedTicket.id === ticketId ? updatedTicket : state.selectedTicket
+      }));
+    } catch (error) {
+      console.error('Erro ao remover tag do ticket:', error);
+      throw error;
     }
   },
 
