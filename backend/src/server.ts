@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import routes from './routes';
 import { setupSocketIO } from './services/socketService';
+import { registerNotificationSocketServer } from './services/notificationQueue';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api', routes);
 
 setupSocketIO(io);
+registerNotificationSocketServer(io);
 
 const PORT = process.env.PORT || 3001;
 

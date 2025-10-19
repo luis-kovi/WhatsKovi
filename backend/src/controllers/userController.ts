@@ -2,6 +2,7 @@ import { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/database';
 import { AuthRequest } from '../middleware/auth';
+import { ensureNotificationPreference } from '../services/notificationService';
 
 export const listUsers = async (req: AuthRequest, res: Response) => {
   try {
@@ -53,6 +54,8 @@ export const createUser = async (req: AuthRequest, res: Response) => {
         maxTickets: true
       }
     });
+
+    await ensureNotificationPreference(user.id);
 
     return res.status(201).json(user);
   } catch (error) {

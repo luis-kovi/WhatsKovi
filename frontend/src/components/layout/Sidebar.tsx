@@ -3,6 +3,7 @@
 import { useAuthStore } from '@/store/authStore';
 import { MessageSquare, Users, Settings, LogOut, BarChart3, UserCog } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
+import NotificationBell from '@/components/notifications/NotificationBell';
 
 const baseNav = [
   {
@@ -55,10 +56,11 @@ export default function Sidebar() {
 
   return (
     <div className="flex w-20 flex-col items-center border-r border-gray-200 bg-white py-6">
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white">
           WK
         </div>
+        <NotificationBell />
       </div>
 
       <nav className="flex flex-1 flex-col gap-4">

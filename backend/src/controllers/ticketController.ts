@@ -11,6 +11,7 @@ import {
   InvalidTagError,
   validateTagIdentifiers
 } from '../services/tagAutomation';
+import { notifyNewTicketCreated, notifyTicketTransferred } from '../services/notificationTriggers';
 
 export const listTickets = async (req: AuthRequest, res: Response) => {
   try {
@@ -195,6 +196,13 @@ export const transferTicket = async (req: AuthRequest, res: Response) => {
     });
 
     io.emit('ticket:update', ticket);
+    const actor = req.user
+      ? await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { id: true, name: true }
+        })
+      : null;
+    await notifyTicketTransferred(ticket, actor);
 
     return res.json(ticket);
   } catch (error) {
@@ -340,6 +348,7 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
     }
 
     io.emit('ticket:new', fullTicket);
+    await notifyNewTicketCreated(fullTicket, req.user?.id);
 
     return res.status(201).json(fullTicket);
   } catch (error) {

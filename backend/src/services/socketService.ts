@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { countUnreadNotifications } from './notificationService';
 
 interface UserSocket {
   userId: string;
@@ -32,6 +33,14 @@ export const setupSocketIO = (io: Server) => {
       userId,
       socketId: socket.id
     });
+
+    socket.join(userId);
+
+    countUnreadNotifications(userId)
+      .then((unreadCount) => {
+        socket.emit('notification:init', { unreadCount });
+      })
+      .catch(() => undefined);
 
     io.emit('user:online', { userId });
 

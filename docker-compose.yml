@@ -13,6 +13,14 @@ services:
     networks:
       - whatskovi-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: whatskovi-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - whatskovi-network
+
   backend:
     build:
       context: ./backend
@@ -27,10 +35,21 @@ services:
       PORT: 3001
       NODE_ENV: production
       FRONTEND_URL: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: ""
+      SMTP_PORT: 587
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ""
+      SMTP_SECURE: "true"
+      WEB_PUSH_CONTACT: mailto:contato@whatskovi.com
+      WEB_PUSH_PUBLIC_KEY: ""
+      WEB_PUSH_PRIVATE_KEY: ""
     ports:
       - "3001:3001"
     depends_on:
       - postgres
+      - redis
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/sessions:/app/sessions

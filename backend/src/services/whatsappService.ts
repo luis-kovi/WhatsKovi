@@ -5,6 +5,7 @@ import qrcode from 'qrcode';
 import prisma from '../config/database';
 import { io } from '../server';
 import { applyAutomaticTagsToTicket } from './tagAutomation';
+import { notifyIncomingTicketMessage, notifyNewTicketCreated } from './notificationTriggers';
 
 interface WhatsAppClient {
   id: string;
@@ -187,6 +188,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
       }
 
       io.emit('ticket:new', ticket);
+      await notifyNewTicketCreated(ticket);
     }
 
     let mediaUrl: string | undefined;
@@ -229,6 +231,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
     await applyAutomaticTagsToTicket(ticket.id, prismaMessage.body ?? '');
 
     io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
+    await notifyIncomingTicketMessage(ticket, prismaMessage.body ?? '', { actorId: null });
   } catch (error) {
     console.error('Erro ao processar mensagem:', error);
   }

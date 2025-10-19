@@ -37,6 +37,24 @@ async function ensureWhatsAppConnection() {
   });
 }
 
+async function ensureNotificationPreference(userId: string) {
+  await prisma.notificationPreference.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      notifyNewTicket: true,
+      notifyTicketMessage: true,
+      notifyTransfer: true,
+      pushEnabled: false,
+      emailEnabled: false,
+      soundEnabled: true,
+      soundTheme: 'classic',
+      smtpSecure: true
+    }
+  });
+}
+
 async function main() {
   console.log('==> Iniciando seed...');
 
@@ -53,6 +71,7 @@ async function main() {
       maxTickets: 10
     }
   });
+  await ensureNotificationPreference(admin.id);
   console.log('Admin pronto:', admin.email);
 
   // Agents
@@ -68,6 +87,7 @@ async function main() {
       maxTickets: 3
     }
   });
+  await ensureNotificationPreference(agent1.id);
 
   const agent2 = await prisma.user.upsert({
     where: { email: 'atendente2@whatskovi.com' },
@@ -80,6 +100,7 @@ async function main() {
       maxTickets: 3
     }
   });
+  await ensureNotificationPreference(agent2.id);
   console.log('Atendentes prontos');
 
   // Queues

@@ -13,6 +13,7 @@ import TagSettingsSection from '@/components/settings/TagSettingsSection';
 import { QuickReplySettingsSection } from '@/components/settings/QuickReplySettingsSection';
 import { useAuthStore } from '@/store/authStore';
 import { useMetadataStore } from '@/store/metadataStore';
+import { useNotificationStore } from '@/store/notificationStore';
 import { useRouter } from 'next/navigation';
 
 type WebhookConfig = {
@@ -53,6 +54,17 @@ export default function SettingsPage() {
   const createTag = useMetadataStore((state) => state.createTag);
   const updateTag = useMetadataStore((state) => state.updateTag);
   const deleteTag = useMetadataStore((state) => state.deleteTag);
+  const {
+    preferences: notificationPreferences,
+    savePreferences: saveNotificationPreferences,
+    togglePush,
+    fetchPreferences: fetchNotificationPreferences
+  } = useNotificationStore((state) => ({
+    preferences: state.preferences,
+    savePreferences: state.savePreferences,
+    togglePush: state.togglePush,
+    fetchPreferences: state.fetchPreferences
+  }));
 
   const [generalSettings, setGeneralSettings] = useState<GeneralSettingsValues>(initialGeneral);
   const [serviceSettings, setServiceSettings] = useState<ServiceSettingsValues>({
@@ -69,11 +81,14 @@ export default function SettingsPage() {
     notifyNewTicket: true,
     notifyTicketMessage: true,
     notifyTransfer: true,
-    notifyPush: false,
-    notifyEmail: false,
+    pushEnabled: false,
+    emailEnabled: false,
+    soundEnabled: true,
+    soundTheme: 'classic',
     smtpHost: '',
     smtpPort: 587,
     smtpUser: '',
+    smtpPassword: '',
     smtpFrom: '',
     smtpSecure: true
   });
@@ -113,6 +128,32 @@ export default function SettingsPage() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    fetchNotificationPreferences();
+  }, [fetchNotificationPreferences]);
+
+  useEffect(() => {
+    if (!notificationPreferences) {
+      return;
+    }
+
+    setNotificationSettings({
+      notifyNewTicket: notificationPreferences.notifyNewTicket,
+      notifyTicketMessage: notificationPreferences.notifyTicketMessage,
+      notifyTransfer: notificationPreferences.notifyTransfer,
+      pushEnabled: notificationPreferences.pushEnabled,
+      emailEnabled: notificationPreferences.emailEnabled,
+      soundEnabled: notificationPreferences.soundEnabled,
+      soundTheme: (notificationPreferences.soundTheme as NotificationSettingsValues['soundTheme']) ?? 'classic',
+      smtpHost: notificationPreferences.smtpHost ?? '',
+      smtpPort: notificationPreferences.smtpPort ?? 587,
+      smtpUser: notificationPreferences.smtpUser ?? '',
+      smtpPassword: notificationPreferences.smtpPassword ?? '',
+      smtpFrom: notificationPreferences.smtpFrom ?? '',
+      smtpSecure: notificationPreferences.smtpSecure
+    });
+  }, [notificationPreferences]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -173,8 +214,46 @@ export default function SettingsPage() {
   const handleServiceSave = () =>
     simulateSave(setServiceSaving, 'Regras de atendimento salvas.');
 
-  const handleNotificationSave = () =>
-    simulateSave(setNotificationSaving, 'Preferencias de notificacoes salvas.');
+  const handleNotificationSave = async () => {
+    setNotificationSaving(true);
+    try {
+      if (notificationPreferences?.pushEnabled !== notificationSettings.pushEnabled) {
+        const toggled = await togglePush(notificationSettings.pushEnabled);
+        if (!toggled) {
+          setNotificationSettings((prev) => ({
+            ...prev,
+            pushEnabled: notificationPreferences?.pushEnabled ?? false
+          }));
+          throw new Error('PUSH_TOGGLE_FAILED');
+        }
+      }
+
+      await saveNotificationPreferences({
+        notifyNewTicket: notificationSettings.notifyNewTicket,
+        notifyTicketMessage: notificationSettings.notifyTicketMessage,
+        notifyTransfer: notificationSettings.notifyTransfer,
+        emailEnabled: notificationSettings.emailEnabled,
+        soundEnabled: notificationSettings.soundEnabled,
+        soundTheme: notificationSettings.soundTheme,
+        smtpHost: notificationSettings.smtpHost.trim() || null,
+        smtpPort: notificationSettings.smtpPort,
+        smtpUser: notificationSettings.smtpUser.trim() || null,
+        smtpPassword: notificationSettings.smtpPassword.trim() || null,
+        smtpFrom: notificationSettings.smtpFrom.trim() || null,
+        smtpSecure: notificationSettings.smtpSecure
+      });
+
+      toast.success('Preferências de notificações salvas.');
+    } catch (error) {
+      if (error instanceof Error && error.message === 'PUSH_TOGGLE_FAILED') {
+        toast.error('Não foi possível atualizar as notificações push.');
+      } else {
+        toast.error('Erro ao salvar preferências de notificações.');
+      }
+    } finally {
+      setNotificationSaving(false);
+    }
+  };
 
   const handleCreateQueue = async (payload: {
     name: string;

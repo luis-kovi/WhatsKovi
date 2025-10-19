@@ -48,6 +48,18 @@ enum MessageStatus {
   READ
 }
 
+enum NotificationType {
+  NEW_TICKET
+  TICKET_MESSAGE
+  TICKET_TRANSFER
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+}
+
 model User {
   id                String       @id @default(uuid())
   name              String
@@ -68,6 +80,9 @@ model User {
   quickReplyUsages  QuickReplyUsage[]   @relation("UserQuickReplyUsage")
   contactNotes      ContactNote[]       @relation("UserContactNotes")
   contactSegments   ContactSegment[]    @relation("UserContactSegments")
+  notifications     Notification[]
+  notificationPreference NotificationPreference?
+  notificationSubscriptions NotificationSubscription[]
   
   @@map("users")
 }
@@ -368,6 +383,67 @@ model QuickReplyUsage {
   @@index([ticketId])
   @@index([userId])
   @@map("quick_reply_usage")
+}
+
+model Notification {
+  id          String               @id @default(uuid())
+  userId      String
+  type        NotificationType
+  title       String
+  body        String
+  data        Json?
+  channels    NotificationChannel[] @default([IN_APP])
+  readAt      DateTime?
+  createdAt   DateTime             @default(now())
+  metadata    Json?
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  notifyNewTicket      Boolean  @default(true)
+  notifyTicketMessage  Boolean  @default(true)
+  notifyTransfer       Boolean  @default(true)
+  pushEnabled          Boolean  @default(false)
+  emailEnabled         Boolean  @default(false)
+  soundEnabled         Boolean  @default(true)
+  soundTheme           String   @default("classic")
+  smtpHost             String? 
+  smtpPort             Int? 
+  smtpUser             String?
+  smtpPassword         String?
+  smtpFrom             String?
+  smtpSecure           Boolean  @default(true)
+  quietHoursStart      Int?
+  quietHoursEnd        Int?
+  muteUntil            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model NotificationSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  auth      String
+  p256dh    String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notification_subscriptions")
 }
 
 enum TagMatchType {

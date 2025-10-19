@@ -68,6 +68,17 @@ import {
 import { getDashboardSummary, getDashboardMetrics } from '../controllers/dashboardController';
 import { authMiddleware, adminOnly } from '../middleware/auth';
 import upload from '../middleware/upload';
+import {
+  getNotifications,
+  getNotificationStats,
+  markAllNotificationsRead,
+  markNotificationListAsRead,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  subscribeToPush,
+  unsubscribeFromPush,
+  triggerTestNotification
+} from '../controllers/notificationController';
 
 const router = Router();
 
@@ -162,5 +173,16 @@ router.delete('/contacts/:id/notes/:noteId', authMiddleware, deleteContactNote);
 // Dashboard
 router.get('/dashboard/summary', authMiddleware, getDashboardSummary);
 router.get('/dashboard/metrics', authMiddleware, getDashboardMetrics);
+
+// Notifications
+router.get('/notifications', authMiddleware, getNotifications);
+router.get('/notifications/unread-count', authMiddleware, getNotificationStats);
+router.post('/notifications/mark-read', authMiddleware, markNotificationListAsRead);
+router.post('/notifications/mark-all-read', authMiddleware, markAllNotificationsRead);
+router.get('/notifications/preferences', authMiddleware, getNotificationPreferences);
+router.put('/notifications/preferences', authMiddleware, updateNotificationPreferences);
+router.post('/notifications/subscribe', authMiddleware, subscribeToPush);
+router.post('/notifications/unsubscribe', authMiddleware, unsubscribeFromPush);
+router.post('/notifications/test', authMiddleware, triggerTestNotification);
 
 export default router;
