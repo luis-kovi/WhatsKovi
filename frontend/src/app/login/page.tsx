@@ -42,37 +42,37 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="text-center mb-8">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10 transition-colors duration-300 dark:from-slate-950 dark:to-slate-900">
+      <div className="w-full max-w-md rounded-2xl border border-transparent bg-white p-8 shadow-2xl transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold text-primary mb-2">WhatsKovi</h1>
           <p className="text-gray-600">Gestão de Atendimentos WhatsApp</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-200">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none transition focus:border-transparent focus:ring-2 focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               placeholder="seu@email.com"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-200">
               Senha
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none transition focus:border-transparent focus:ring-2 focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               placeholder="••••••••"
               required
             />
@@ -81,7 +81,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary/90 transition flex items-center justify-center gap-2 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 font-semibold text-white transition hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? (
               <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
@@ -94,7 +94,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-gray-600 dark:text-slate-300">
           <p>Credenciais padrão:</p>
           <p className="font-mono text-xs mt-2">admin@whatskovi.com / admin123</p>
         </div>

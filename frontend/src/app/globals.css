@@ -21,6 +21,67 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+@layer base {
+  html {
+    @apply bg-gray-50 text-gray-900 transition-colors duration-300 ease-in-out;
+  }
+
+  html.dark {
+    @apply bg-slate-950 text-slate-100;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply min-h-screen bg-transparent text-inherit transition-colors duration-300 ease-in-out;
+  }
+
+  .dark body {
+    @apply bg-transparent text-inherit;
+  }
+
+  a {
+    @apply transition-colors duration-200 ease-in-out;
+  }
+
+  .dark .bg-white {
+    background-color: theme('colors.slate.900') !important;
+  }
+
+  .dark .bg-gray-50 {
+    background-color: theme('colors.slate.950') !important;
+  }
+
+  .dark .bg-gray-100 {
+    background-color: theme('colors.slate.900') !important;
+  }
+
+  .dark .border-gray-200 {
+    border-color: rgba(148, 163, 184, 0.28) !important;
+  }
+
+  .dark .border-gray-100 {
+    border-color: rgba(148, 163, 184, 0.2) !important;
+  }
+
+  .dark .text-gray-600 {
+    color: theme('colors.slate.300') !important;
+  }
+
+  .dark .text-gray-500 {
+    color: theme('colors.slate.300') !important;
+  }
+
+  .dark .text-gray-400 {
+    color: theme('colors.slate.400') !important;
+  }
+
+  .dark .shadow-sm,
+  .dark .shadow,
+  .dark .shadow-lg {
+    --tw-shadow-color: rgba(15, 23, 42, 0.6);
+  }
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }
@@ -36,4 +97,16 @@ body {
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }

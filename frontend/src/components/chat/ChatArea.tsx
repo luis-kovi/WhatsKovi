@@ -20,7 +20,6 @@ import {
   Loader2,
   X
 } from 'lucide-react';
-import api from '@/services/api';
 import { useTicketStore, TicketMessage } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useMessages } from '@/hooks/useMessages';
@@ -28,6 +27,7 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuthStore } from '@/store/authStore';
 import { MessageItem } from '@/components/chat/MessageItem';
 import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
+import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
@@ -266,6 +266,7 @@ export default function ChatArea() {
   const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -282,6 +283,19 @@ export default function ChatArea() {
   const activeTagIds = useMemo(
     () => selectedTicket?.tags.map((relation) => relation.tag.id) ?? [],
     [selectedTicket?.tags]
+  );
+
+  const exportPreview = useMemo(
+    () =>
+      messages.slice(-5).map((message) => ({
+        id: message.id,
+        author: message.user ? message.user.name : selectedTicket?.contact.name ?? 'Contato',
+        createdAt: message.createdAt,
+        snippet: (message.body ?? '').slice(0, 200),
+        isPrivate: message.isPrivate,
+        hasMedia: Boolean(message.mediaUrl)
+      })),
+    [messages, selectedTicket?.contact.name]
   );
 
   const scrollToBottom = useCallback(() => {
@@ -756,27 +770,16 @@ export default function ChatArea() {
     }
   };
 
-  const handleExportConversation = async () => {
+  const handleExportConversation = () => {
     if (!selectedTicket) return;
-    try {
-      const response = await api.get(`/tickets/${selectedTicket.id}/export`, {
-        responseType: 'blob'
-      });
-
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `ticket-${selectedTicket.id}.txt`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('Exportacao iniciada');
-    } catch (error) {
-      console.error('Erro ao exportar ticket:', error);
-      toast.error('Falha ao exportar conversacao');
-    }
+    setExportModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!selectedTicket) {
+      setExportModalOpen(false);
+    }
+  }, [selectedTicket]);
 
   const handleQuoteMessage = (message: TicketMessage) => {
     setQuotedMessage(message);
@@ -813,19 +816,19 @@ export default function ChatArea() {
 
   if (!selectedTicket) {
     return (
-      <div className='flex flex-1 items-center justify-center bg-gray-50'>
-        <div className='text-center text-gray-500'>
+      <div className='flex flex-1 items-center justify-center bg-gray-50 transition-colors duration-300 dark:bg-slate-950'>
+        <div className='text-center text-gray-500 dark:text-slate-400'>
           <MessageSquare size={64} className='mx-auto mb-4 opacity-40' />
           <p className='text-lg font-semibold'>Selecione um ticket para iniciar o atendimento</p>
-          <p className='text-sm text-gray-400'>Os detalhes da conversa aparecem aqui.</p>
+          <p className='text-sm text-gray-400 dark:text-slate-500'>Os detalhes da conversa aparecem aqui.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className='flex flex-1 flex-col bg-gray-50'>
-      <div className='flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4'>
+    <div className='flex flex-1 flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-950'>
+      <div className='flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900'>
         <div className='flex items-center gap-3'>
           <div className='relative h-12 w-12 overflow-hidden rounded-full'>
             {contactAvatar.hasImage && contactAvatar.src ? (
@@ -936,7 +939,7 @@ export default function ChatArea() {
         </div>
       </div>
 
-      <div className='flex-1 space-y-4 overflow-y-auto bg-gray-100 px-5 py-4'>
+      <div className='flex-1 space-y-4 overflow-y-auto bg-gray-100 px-5 py-4 transition-colors duration-300 dark:bg-slate-900'>
         {!messagesLoaded ? (
           <div className='flex h-full items-center justify-center text-sm text-gray-500'>
             <Loader2 className='mr-2 h-4 w-4 animate-spin' />
@@ -1212,21 +1215,31 @@ export default function ChatArea() {
       )}
 
       {messageToDelete && (
-      <MessageDeleteModal
-        message={messageToDelete}
-        deleting={isDeleting}
-        onClose={handleCancelDelete}
-        onConfirm={handleConfirmDelete}
-      />
-    )}
+        <MessageDeleteModal
+          message={messageToDelete}
+          deleting={isDeleting}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
 
-    <QuickReplyModal
-      open={isQuickReplyModalOpen}
-      onClose={() => setQuickReplyModalOpen(false)}
-      ticketId={selectedTicket?.id}
-      queueId={selectedTicket?.queue?.id ?? null}
-      onInsert={handleInsertQuickReply}
-    />
-  </div>
+      {selectedTicket && (
+        <ChatExportModal
+          open={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+          ticketId={selectedTicket.id}
+          contactName={selectedTicket.contact.name}
+          initialPreview={exportPreview}
+        />
+      )}
+
+      <QuickReplyModal
+        open={isQuickReplyModalOpen}
+        onClose={() => setQuickReplyModalOpen(false)}
+        ticketId={selectedTicket?.id}
+        queueId={selectedTicket?.queue?.id ?? null}
+        onInsert={handleInsertQuickReply}
+      />
+    </div>
 );
 }

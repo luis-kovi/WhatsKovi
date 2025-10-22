@@ -233,7 +233,7 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-6 py-8 lg:px-8">

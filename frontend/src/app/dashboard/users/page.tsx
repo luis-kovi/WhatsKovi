@@ -204,7 +204,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-8 py-10">

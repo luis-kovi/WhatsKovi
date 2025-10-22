@@ -24,7 +24,7 @@ export default function Home() {
   }, [initializing, isAuthenticated, router]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 transition-colors duration-300 dark:bg-slate-950">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
     </div>
   );

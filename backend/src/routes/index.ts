@@ -11,8 +11,7 @@ import {
   reopenTicket,
   updateTicketDetails,
   applyTicketTags,
-  removeTicketTag,
-  exportTicket
+  removeTicketTag
 } from '../controllers/ticketController';
 import {
   sendMessage,
@@ -79,6 +78,17 @@ import {
   unsubscribeFromPush,
   triggerTestNotification
 } from '../controllers/notificationController';
+import {
+  performAdvancedSearch,
+  listAdvancedSearchHistory,
+  clearAdvancedSearchHistory
+} from '../controllers/searchController';
+import {
+  requestConversationExport,
+  listTicketExports,
+  getExportJobDetails,
+  downloadExportJob
+} from '../controllers/conversationExportController';
 
 const router = Router();
 
@@ -97,7 +107,6 @@ router.delete('/users/:id', authMiddleware, adminOnly, deleteUser);
 router.post('/tickets', authMiddleware, createManualTicket);
 router.get('/tickets', authMiddleware, listTickets);
 router.get('/tickets/:id', authMiddleware, getTicket);
-router.get('/tickets/:id/export', authMiddleware, exportTicket);
 router.put('/tickets/:id/accept', authMiddleware, acceptTicket);
 router.put('/tickets/:id/close', authMiddleware, closeTicket);
 router.put('/tickets/:id/transfer', authMiddleware, transferTicket);
@@ -184,5 +193,16 @@ router.put('/notifications/preferences', authMiddleware, updateNotificationPrefe
 router.post('/notifications/subscribe', authMiddleware, subscribeToPush);
 router.post('/notifications/unsubscribe', authMiddleware, unsubscribeFromPush);
 router.post('/notifications/test', authMiddleware, triggerTestNotification);
+
+// Conversation export
+router.post('/tickets/:id/export', authMiddleware, requestConversationExport);
+router.get('/tickets/:id/export/jobs', authMiddleware, listTicketExports);
+router.get('/exports/:id', authMiddleware, getExportJobDetails);
+router.get('/exports/:id/download', authMiddleware, downloadExportJob);
+
+// Advanced search
+router.get('/search', authMiddleware, performAdvancedSearch);
+router.get('/search/history', authMiddleware, listAdvancedSearchHistory);
+router.delete('/search/history', authMiddleware, clearAdvancedSearchHistory);
 
 export default router;

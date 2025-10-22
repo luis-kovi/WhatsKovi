@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import routes from './routes';
 import { setupSocketIO } from './services/socketService';
 import { registerNotificationSocketServer } from './services/notificationQueue';
+import './services/exportQueue';
 
 dotenv.config();
 

@@ -145,18 +145,18 @@
 ### 6. Busca Avançada
 
 #### Backend
-- [ ] Full-text search no PostgreSQL
-- [ ] Busca em mensagens
-- [ ] Busca em contatos
-- [ ] Filtros combinados
-- [ ] Histórico de buscas
+- ✅ Full-text search no PostgreSQL
+- ✅ Busca em mensagens
+- ✅ Busca em contatos
+- ✅ Filtros combinados
+- ✅ Histórico de buscas
 
 #### Frontend
-- [ ] Barra de busca global
-- [ ] Filtros avançados
-- [ ] Resultados agrupados
-- [ ] Highlight de termos
-- [ ] Busca em tempo real
+- ✅ Barra de busca global
+- ✅ Filtros avançados
+- ✅ Resultados agrupados
+- ✅ Highlight de termos
+- ✅ Busca em tempo real
 
 **Prioridade:** Média
 **Complexidade:** Alta
@@ -166,17 +166,17 @@
 ### 7. Exportação de Conversas
 
 #### Backend
-- [ ] Exportação em PDF
-- [ ] Exportação em TXT
-- [ ] Exportação em JSON
-- [ ] Incluir mídias
-- [ ] Geração assíncrona
+- ✅ Exportação em PDF
+- ✅ Exportação em TXT
+- ✅ Exportação em JSON
+- ✅ Incluir mídias
+- ✅ Geração assíncrona
 
 #### Frontend
-- [ ] Botão de exportar
-- [ ] Seleção de formato
-- [ ] Download automático
-- [ ] Preview antes de exportar
+- ✅ Botão de exportar
+- ✅ Seleção de formato
+- ✅ Download automático
+- ✅ Preview antes de exportar
 
 **Prioridade:** Baixa
 **Complexidade:** Média
@@ -186,11 +186,11 @@
 ### 8. Modo Escuro
 
 #### Frontend
-- [ ] Toggle dark/light mode
-- [ ] Persistência da preferência
-- [ ] Cores adaptadas
-- [ ] Transição suave
-- [ ] Detecção de preferência do sistema
+- ✅ Toggle dark/light mode
+- ✅ Persistência da preferência
+- ✅ Cores adaptadas
+- ✅ Transição suave
+- ✅ Detecção de preferência do sistema
 
 **Prioridade:** Baixa
 **Complexidade:** Baixa
