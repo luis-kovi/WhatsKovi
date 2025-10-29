@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Toggle from './Toggle';
+import { useI18n } from '@/providers/I18nProvider';
 
 export type ServiceSettingsValues = {
   inactivityMinutes: number;
@@ -22,22 +23,21 @@ type ServiceSettingsFormProps = {
 
 export default function ServiceSettingsForm({ values, onChange, onSave, saving }: ServiceSettingsFormProps) {
   const [showPreview, setShowPreview] = useState(false);
+  const { t } = useI18n();
 
   return (
     <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Configurações de atendimento</h2>
-          <p className="text-sm text-gray-500">
-            Defina regras globais para tempos de inatividade, limites de tickets e mensagens automáticas.
-          </p>
+          <h2 className="text-lg font-semibold text-gray-900">{t('settings.service.title')}</h2>
+          <p className="text-sm text-gray-500">{t('settings.service.description')}</p>
         </div>
         <button
           onClick={onSave}
           disabled={saving}
           className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60"
         >
-          {saving ? 'Salvando...' : 'Salvar regras'}
+          {saving ? '…' : t('settings.service.action.save')}
         </button>
       </header>
 
@@ -45,7 +45,7 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-              Ticket considerado inativo após
+              {t('settings.service.inactivity.label')}
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -59,7 +59,7 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
             </label>
 
             <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-              Fechamento automático após
+              {t('settings.service.autoClose.label')}
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -68,25 +68,25 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
                   onChange={(event) => onChange('autoCloseHours', Number(event.target.value))}
                   className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                <span className="text-xs text-gray-500">horas</span>
+                <span className="text-xs text-gray-500">h</span>
               </div>
             </label>
           </div>
 
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-            Mensagem de encerramento automático
+            {t('settings.service.autoCloseMessage.label')}
             <textarea
               value={values.autoCloseMessage}
               onChange={(event) => onChange('autoCloseMessage', event.target.value)}
               rows={4}
               className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="Ex: Encerramos este atendimento após um período sem respostas. Caso precise de ajuda novamente, basta nos enviar uma nova mensagem."
+              placeholder={t('settings.service.autoCloseMessage.placeholder')}
             />
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-              Limite global de tickets
+              {t('settings.service.globalLimit.label')}
               <input
                 type="number"
                 min={1}
@@ -96,7 +96,7 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
               />
             </label>
             <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-              Limite por atendente
+              {t('settings.service.agentLimit.label')}
               <input
                 type="number"
                 min={1}
@@ -110,32 +110,32 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
 
         <div className="space-y-3 rounded-2xl border border-gray-100 bg-gray-50 p-5">
           <Toggle
-            label="Ativar notificações sonoras"
-            description="Alertas para novos tickets, mensagens recebidas e transferências."
+            label={t('settings.service.sound.label')}
+            description={t('settings.service.sound.description')}
             checked={values.soundEnabled}
             onChange={(checked) => onChange('soundEnabled', checked)}
           />
           <Toggle
-            label="Enviar pesquisa de satisfação automaticamente"
-            description="Dispara formulário NPS ao finalizar cada atendimento."
+            label={t('settings.service.survey.label')}
+            description={t('settings.service.survey.description')}
             checked={values.satisfactionSurveyEnabled}
             onChange={(checked) => onChange('satisfactionSurveyEnabled', checked)}
           />
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-            <p className="font-semibold text-gray-800">Pré-visualização</p>
-            <p className="mt-1 text-xs text-gray-500">Simule a mensagem de encerramento que será enviada aos clientes.</p>
+            <p className="font-semibold text-gray-800">{t('settings.service.preview.title')}</p>
+            <p className="mt-1 text-xs text-gray-500">{t('settings.service.preview.description')}</p>
             <button
               onClick={() => setShowPreview((prev) => !prev)}
               className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
             >
-              {showPreview ? 'Esconder prévia' : 'Visualizar mensagem'}
+              {showPreview ? t('settings.service.preview.hide') : t('settings.service.preview.show')}
             </button>
 
             {showPreview && (
               <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-gray-700">
-                <p className="mb-2 font-semibold text-primary">Mensagem automática enviada ao cliente:</p>
-                <p>{values.autoCloseMessage || 'Nenhuma mensagem configurada.'}</p>
+                <p className="mb-2 font-semibold text-primary">{t('settings.service.preview.messageTitle')}</p>
+                <p>{values.autoCloseMessage || t('settings.service.preview.empty')}</p>
               </div>
             )}
           </div>
@@ -144,4 +144,3 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
     </section>
   );
 }
-

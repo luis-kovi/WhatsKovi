@@ -1,6 +1,7 @@
 'use client';
 
 import Toggle from './Toggle';
+import { useI18n } from '@/providers/I18nProvider';
 
 export type NotificationSettingsValues = {
   notifyNewTicket: boolean;
@@ -11,7 +12,7 @@ export type NotificationSettingsValues = {
   soundEnabled: boolean;
   soundTheme: 'classic' | 'soft' | 'bright';
   smtpHost: string;
-  smtpPort: number;
+  smtpPort: number | '';
   smtpUser: string;
   smtpPassword: string;
   smtpFrom: string;
@@ -34,42 +35,44 @@ export default function NotificationSettingsForm({
   onSave,
   saving
 }: NotificationSettingsFormProps) {
+  const { t } = useI18n();
+
   return (
     <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Notificações</h2>
-          <p className="text-sm text-gray-500">
-            Configure alertas em tempo real, push no navegador e envio por e-mail (SMTP).
-          </p>
+          <h2 className="text-lg font-semibold text-gray-900">{t('settings.notifications.title')}</h2>
+          <p className="text-sm text-gray-500">{t('settings.notifications.description')}</p>
         </div>
         <button
           onClick={onSave}
           disabled={saving}
           className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60"
         >
-          {saving ? 'Salvando...' : 'Salvar preferências'}
+          {saving ? '…' : t('settings.notifications.action.save')}
         </button>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         <div className="space-y-4 rounded-2xl border border-gray-100 bg-gray-50 p-5">
-          <p className="text-xs font-semibold uppercase text-gray-500">Alertas do sistema</p>
+          <p className="text-xs font-semibold uppercase text-gray-500">
+            {t('settings.notifications.alerts.title')}
+          </p>
           <Toggle
-            label="Novo ticket na fila"
-            description="Avisar sempre que um ticket for criado ou cair na fila monitorada."
+            label={t('settings.notifications.alerts.newTicket.label')}
+            description={t('settings.notifications.alerts.newTicket.description')}
             checked={values.notifyNewTicket}
             onChange={(checked) => onChange('notifyNewTicket', checked)}
           />
           <Toggle
-            label="Nova mensagem do cliente"
-            description="Receber alerta quando o cliente responder enquanto o ticket estiver aberto."
+            label={t('settings.notifications.alerts.message.label')}
+            description={t('settings.notifications.alerts.message.description')}
             checked={values.notifyTicketMessage}
             onChange={(checked) => onChange('notifyTicketMessage', checked)}
           />
           <Toggle
-            label="Ticket transferido para mim"
-            description="Ser notificado quando um ticket for transferido para sua fila ou usuário."
+            label={t('settings.notifications.alerts.transfer.label')}
+            description={t('settings.notifications.alerts.transfer.description')}
             checked={values.notifyTransfer}
             onChange={(checked) => onChange('notifyTransfer', checked)}
           />
@@ -77,13 +80,15 @@ export default function NotificationSettingsForm({
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-800">Som dos alertas</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {t('settings.notifications.sound.title')}
+                </p>
                 <p className="text-xs text-gray-500">
-                  Escolha o tom do aviso ao chegar uma nova notificação.
+                  {t('settings.notifications.sound.description')}
                 </p>
               </div>
               <label className="flex items-center gap-2 text-xs text-gray-600">
-                Ativar
+                {t('settings.notifications.sound.enable')}
                 <input
                   type="checkbox"
                   checked={values.soundEnabled}
@@ -99,86 +104,89 @@ export default function NotificationSettingsForm({
               disabled={!values.soundEnabled}
               className="mt-3 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-50"
             >
-              <option value="classic">Clássico vibrante</option>
-              <option value="soft">Suave e discreto</option>
-              <option value="bright">Intenso e curto</option>
+              <option value="classic">{t('settings.notifications.sound.classic')}</option>
+              <option value="soft">{t('settings.notifications.sound.soft')}</option>
+              <option value="bright">{t('settings.notifications.sound.bright')}</option>
             </select>
           </div>
 
           <Toggle
-            label="Notificações push no navegador"
-            description="Receber alertas mesmo com a aba minimizada (requer consentimento do navegador)."
+            label={t('settings.notifications.push.label')}
+            description={t('settings.notifications.push.description')}
             checked={values.pushEnabled}
             onChange={(checked) => onChange('pushEnabled', checked)}
           />
           <Toggle
-            label="Envio por e-mail"
-            description="Encaminhar alertas críticos para o e-mail configurado abaixo."
+            label={t('settings.notifications.email.label')}
+            description={t('settings.notifications.email.description')}
             checked={values.emailEnabled}
             onChange={(checked) => onChange('emailEnabled', checked)}
           />
         </div>
 
         <div className="space-y-4 rounded-2xl border border-gray-100 bg-gray-50 p-5">
-          <p className="text-xs font-semibold uppercase text-gray-500">Configuração SMTP</p>
-          <p className="text-xs text-gray-500">
-            Utilize um servidor SMTP próprio para disparo de notificações importantes (ex: ticket inativo, falha na conexão WhatsApp).
+          <p className="text-xs font-semibold uppercase text-gray-500">
+            {t('settings.notifications.smtp.title')}
           </p>
+          <p className="text-xs text-gray-500">{t('settings.notifications.smtp.description')}</p>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-            Host
+            {t('settings.notifications.smtp.host')}
             <input
               type="text"
               value={values.smtpHost}
               onChange={(event) => onChange('smtpHost', event.target.value)}
               className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="smtp.seudominio.com"
+              placeholder="smtp.example.com"
             />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-              Porta
+              {t('settings.notifications.smtp.port')}
               <input
                 type="number"
                 min={1}
                 value={values.smtpPort}
-                onChange={(event) => onChange('smtpPort', Number(event.target.value))}
+                onChange={(event) =>
+                  onChange('smtpPort', event.target.value === '' ? '' : Number(event.target.value))
+                }
                 className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-              Usuário
+              {t('settings.notifications.smtp.user')}
               <input
                 type="text"
                 value={values.smtpUser}
                 onChange={(event) => onChange('smtpUser', event.target.value)}
                 className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="usuario@seudominio.com"
+                placeholder="user@example.com"
               />
             </label>
           </div>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-            Senha
+            {t('settings.notifications.smtp.password')}
             <input
               type="password"
               value={values.smtpPassword}
               onChange={(event) => onChange('smtpPassword', event.target.value)}
               className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="Senha do SMTP"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
-            Remetente padrão (from)
+            {t('settings.notifications.smtp.from')}
             <input
               type="email"
               value={values.smtpFrom}
               onChange={(event) => onChange('smtpFrom', event.target.value)}
               className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="atendimento@seudominio.com"
+              placeholder="support@example.com"
             />
           </label>
           <div className="rounded-xl border border-gray-200 bg-white p-4 text-xs text-gray-500">
             <label className="flex items-center justify-between">
-              <span className="font-semibold text-gray-700">Conexão segura (SSL/TLS)</span>
+              <span className="font-semibold text-gray-700">
+                {t('settings.notifications.smtp.secure')}
+              </span>
               <label className="relative inline-flex cursor-pointer items-center">
                 <input
                   type="checkbox"
@@ -192,7 +200,7 @@ export default function NotificationSettingsForm({
               </label>
             </label>
             <p className="mt-2 text-xs">
-              Use SSL/TLS para conexões seguras (recomendado 465 para SSL, 587 para STARTTLS).
+              {t('settings.notifications.smtp.secureHelp')}
             </p>
           </div>
         </div>
@@ -200,3 +208,4 @@ export default function NotificationSettingsForm({
     </section>
   );
 }
+

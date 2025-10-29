@@ -52,6 +52,7 @@ enum NotificationType {
   NEW_TICKET
   TICKET_MESSAGE
   TICKET_TRANSFER
+  REPORT_READY
 }
 
 enum NotificationChannel {
@@ -71,6 +72,42 @@ enum ExportStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum ReportFileFormat {
+  CSV
+  XLSX
+  PDF
+}
+
+enum ReportFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ChatbotTriggerType {
+  KEYWORD
+  DEFAULT
+  MANUAL
+}
+
+enum ChatbotSender {
+  BOT
+  CONTACT
+}
+
+enum SurveyStatus {
+  PENDING
+  SENT
+  RESPONDED
+  EXPIRED
+}
+
+enum SurveyChannel {
+  WHATSAPP
+  LINK
+  MANUAL
 }
 
 model User {
@@ -96,8 +133,12 @@ model User {
   notifications     Notification[]
   notificationPreference NotificationPreference?
   notificationSubscriptions NotificationSubscription[]
+  advancedSettingsUpdates AdvancedSettings[]
   searchHistory     SearchHistory[]
   exportJobs        ExportJob[]
+  reportSchedules   ReportSchedule[]
+  reportSnapshots   ReportSnapshot[]
+  satisfactionSurveys SatisfactionSurvey[] @relation("SurveyAgent")
 
   @@map("users")
 }
@@ -113,6 +154,7 @@ model WhatsAppConnection {
   updatedAt         DateTime     @updatedAt
   
   tickets           Ticket[]
+  satisfactionSurveys SatisfactionSurvey[]
   
   @@map("whatsapp_connections")
 }
@@ -134,6 +176,8 @@ model Contact {
   tags              ContactTag[]
   customFieldValues ContactFieldValue[]
   notesHistory      ContactNote[]
+  chatbotSessions   ChatbotSession[]
+  satisfactionSurveys SatisfactionSurvey[]
   
   @@map("contacts")
 }
@@ -153,6 +197,8 @@ model Queue {
   users             QueueUser[]
   quickReplies      QuickReply[]        @relation("QueueQuickReplies")
   quickReplyUsages  QuickReplyUsage[]   @relation("QueueQuickReplyUsage")
+  chatbotFlows      ChatbotFlow[]
+  satisfactionSurveys SatisfactionSurvey[]
   
   @@map("queues")
 }
@@ -196,8 +242,42 @@ model Ticket {
   tags              TicketTag[]
   quickReplyUsages  QuickReplyUsage[]   @relation("TicketQuickReplyUsage")
   exportJobs        ExportJob[]
+  chatbotSessions   ChatbotSession[]
+  satisfactionSurvey SatisfactionSurvey?
   
   @@map("tickets")
+}
+
+model SatisfactionSurvey {
+  id          String        @id @default(uuid())
+  ticketId    String        @unique
+  contactId   String
+  queueId     String?
+  agentId     String?
+  whatsappId  String?
+  token       String        @unique
+  channel     SurveyChannel @default(WHATSAPP)
+  status      SurveyStatus  @default(PENDING)
+  rating      Int?
+  comment     String?
+  autoSent    Boolean       @default(true)
+  sentAt      DateTime?
+  respondedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  ticket      Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  contact     Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  queue       Queue?        @relation(fields: [queueId], references: [id])
+  agent       User?         @relation("SurveyAgent", fields: [agentId], references: [id])
+  whatsapp    WhatsAppConnection? @relation(fields: [whatsappId], references: [id])
+
+  @@index([status, sentAt])
+  @@index([respondedAt])
+  @@index([queueId])
+  @@index([agentId])
+  @@map("satisfaction_surveys")
 }
 
 model Message {
@@ -462,6 +542,45 @@ model NotificationSubscription {
   @@map("notification_subscriptions")
 }
 
+model AdvancedSettings {
+  id                         String   @id @default(uuid())
+  companyName                String   @default("WhatsKovi Atendimento")
+  brandColor                 String   @default("#FF355A")
+  accentColor                String   @default("#7C3AED")
+  language                   String   @default("pt-BR")
+  supportedLanguages         String[] @default(["pt-BR", "en-US", "es-ES"])
+  timezone                   String   @default("America/Sao_Paulo")
+  dateFormat                 String   @default("dd/MM/yyyy HH:mm")
+  logoUrl                    String?
+  logoStorageKey             String?
+  inactivityMinutes          Int      @default(15)
+  autoCloseHours             Int      @default(12)
+  autoCloseMessage           String   @default("Encerramos este atendimento apos um periodo sem respostas. Caso precise de ajuda novamente, estamos por aqui!")
+  globalTicketLimit          Int      @default(400)
+  perAgentTicketLimit        Int      @default(25)
+  soundEnabled               Boolean  @default(true)
+  satisfactionSurveyEnabled  Boolean  @default(true)
+  notifyNewTicket            Boolean  @default(true)
+  notifyTicketMessage        Boolean  @default(true)
+  notifyTransfer             Boolean  @default(true)
+  pushEnabled                Boolean  @default(false)
+  emailEnabled               Boolean  @default(false)
+  soundTheme                 String   @default("classic")
+  smtpHost                   String?
+  smtpPort                   Int?
+  smtpUser                   String?
+  smtpPassword               String?
+  smtpFrom                   String?
+  smtpSecure                 Boolean  @default(true)
+  updatedById                String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  updatedBy                  User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("advanced_settings")
+}
+
 model SearchHistory {
   id        String   @id @default(uuid())
   userId    String
@@ -501,6 +620,107 @@ model ExportJob {
   @@map("export_jobs")
 }
 
+model ReportSchedule {
+  id          String           @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  format      ReportFileFormat @default(PDF)
+  frequency   ReportFrequency  @default(DAILY)
+  timeOfDay   String           @default("08:00")
+  weekdays    String[]         @default([])
+  dayOfMonth  Int?
+  timezone    String           @default("UTC")
+  recipients  String[]
+  filters     Json
+  isActive    Boolean          @default(true)
+  jobId       String?
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots   ReportSnapshot[]
+
+  @@index([userId])
+  @@index([isActive, nextRunAt])
+  @@map("report_schedules")
+}
+
+model ReportSnapshot {
+  id          String           @id @default(uuid())
+  scheduleId  String?
+  userId      String
+  format      ReportFileFormat
+  filePath    String
+  fileName    String
+  fileSize    Int?
+  filters     Json
+  summary     Json
+  generatedAt DateTime         @default(now())
+  expiresAt   DateTime?
+
+  schedule    ReportSchedule?  @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([userId, generatedAt])
+  @@map("report_snapshots")
+}
+
+enum AutomationTrigger {
+  TICKET_CREATED
+  MESSAGE_RECEIVED
+  TICKET_STATUS_CHANGED
+}
+
+enum AutomationLogStatus {
+  SUCCESS
+  SKIPPED
+  FAILED
+}
+
+model AutomationRule {
+  id             String            @id @default(uuid())
+  name           String
+  description    String?
+  trigger        AutomationTrigger
+  isActive       Boolean           @default(true)
+  priority       Int               @default(0)
+  stopOnMatch    Boolean           @default(false)
+  conditions     Json              @default("[]")
+  actions        Json
+  metadata       Json?
+  testPayload    Json?
+  lastExecutedAt DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  logs           AutomationLog[]
+
+  @@map("automation_rules")
+  @@index([trigger, isActive])
+  @@index([priority, updatedAt])
+}
+
+model AutomationLog {
+  id        String              @id @default(uuid())
+  ruleId    String?
+  trigger   AutomationTrigger
+  status    AutomationLogStatus
+  message   String?
+  context   Json?
+  error     String?
+  createdAt DateTime            @default(now())
+
+  rule      AutomationRule?     @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@map("automation_logs")
+  @@index([trigger, createdAt])
+  @@index([createdAt])
+}
+
 enum TagMatchType {
   CONTAINS
   EXACT
@@ -519,4 +739,65 @@ model TagKeyword {
 
   @@unique([tagId, keyword])
   @@map("tag_keywords")
+}
+
+model ChatbotFlow {
+  id               String             @id @default(uuid())
+  name             String
+  description      String?
+  isActive         Boolean            @default(false)
+  isPrimary        Boolean            @default(false)
+  triggerType      ChatbotTriggerType @default(KEYWORD)
+  keywords         String[]           @default([])
+  entryNodeId      String
+  definition       Json
+  schedule         Json?
+  offlineMessage   String?
+  transferQueueId  String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  queue            Queue?             @relation(fields: [transferQueueId], references: [id])
+  sessions         ChatbotSession[]
+
+  @@index([isActive])
+  @@map("chatbot_flows")
+}
+
+model ChatbotSession {
+  id             String    @id @default(uuid())
+  flowId         String
+  ticketId       String
+  contactId      String
+  currentNodeId  String?
+  state          Json?
+  completedAt    DateTime?
+  transferredAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  flow           ChatbotFlow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  ticket         Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  contact        Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  interactions   ChatbotInteraction[]
+
+  @@index([flowId])
+  @@index([ticketId])
+  @@index([contactId])
+  @@map("chatbot_sessions")
+}
+
+model ChatbotInteraction {
+  id         String         @id @default(uuid())
+  sessionId  String
+  sender     ChatbotSender
+  nodeId     String?
+  message    String?
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+
+  session    ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("chatbot_interactions")
 }

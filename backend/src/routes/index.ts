@@ -89,6 +89,50 @@ import {
   getExportJobDetails,
   downloadExportJob
 } from '../controllers/conversationExportController';
+import {
+  listChatbotFlows,
+  getChatbotFlow,
+  createChatbotFlow,
+  updateChatbotFlow,
+  deleteChatbotFlow,
+  getChatbotFlowStats,
+  testChatbotFlow
+} from '../controllers/chatbotController';
+import {
+  listAutomationRules,
+  getAutomationRule,
+  createAutomationRule,
+  updateAutomationRule,
+  deleteAutomationRule,
+  toggleAutomationRule,
+  testAutomationRuleHandler,
+  listAutomationLogs
+} from '../controllers/automationController';
+import {
+  getAdvancedReport,
+  exportAdvancedReport,
+  listReportSchedulesHandler,
+  createReportScheduleHandler,
+  updateReportScheduleHandler,
+  deleteReportScheduleHandler,
+  runReportScheduleHandler,
+  listReportSnapshotsHandler,
+  downloadReportSnapshotHandler
+} from '../controllers/reportController';
+import {
+  getSatisfactionOverview,
+  listSatisfactionResponsesHandler,
+  getTicketSurveyStatus,
+  sendTicketSurvey
+} from '../controllers/satisfactionSurveyController';
+import {
+  getAdvancedSettingsHandler,
+  updateGeneralSettingsHandler,
+  updateServiceSettingsHandler,
+  updateNotificationSettingsHandler,
+  uploadBrandingLogoHandler,
+  removeBrandingLogoHandler
+} from '../controllers/settingsController';
 
 const router = Router();
 
@@ -114,6 +158,8 @@ router.put('/tickets/:id/reopen', authMiddleware, reopenTicket);
 router.put('/tickets/:id/details', authMiddleware, updateTicketDetails);
 router.post('/tickets/:id/tags', authMiddleware, applyTicketTags);
 router.delete('/tickets/:id/tags/:tagId', authMiddleware, removeTicketTag);
+router.get('/tickets/:id/satisfaction', authMiddleware, getTicketSurveyStatus);
+router.post('/tickets/:id/satisfaction/send', authMiddleware, sendTicketSurvey);
 
 // Message routes
 router.post('/messages', authMiddleware, upload.single('media'), sendMessage);
@@ -194,6 +240,14 @@ router.post('/notifications/subscribe', authMiddleware, subscribeToPush);
 router.post('/notifications/unsubscribe', authMiddleware, unsubscribeFromPush);
 router.post('/notifications/test', authMiddleware, triggerTestNotification);
 
+// Advanced settings
+router.get('/settings/advanced', authMiddleware, adminOnly, getAdvancedSettingsHandler);
+router.put('/settings/advanced/general', authMiddleware, adminOnly, updateGeneralSettingsHandler);
+router.put('/settings/advanced/service', authMiddleware, adminOnly, updateServiceSettingsHandler);
+router.put('/settings/advanced/notifications', authMiddleware, adminOnly, updateNotificationSettingsHandler);
+router.post('/settings/advanced/logo', authMiddleware, adminOnly, upload.single('logo'), uploadBrandingLogoHandler);
+router.delete('/settings/advanced/logo', authMiddleware, adminOnly, removeBrandingLogoHandler);
+
 // Conversation export
 router.post('/tickets/:id/export', authMiddleware, requestConversationExport);
 router.get('/tickets/:id/export/jobs', authMiddleware, listTicketExports);
@@ -204,5 +258,39 @@ router.get('/exports/:id/download', authMiddleware, downloadExportJob);
 router.get('/search', authMiddleware, performAdvancedSearch);
 router.get('/search/history', authMiddleware, listAdvancedSearchHistory);
 router.delete('/search/history', authMiddleware, clearAdvancedSearchHistory);
+
+// Chatbot flows
+router.get('/chatbot/flows', authMiddleware, listChatbotFlows);
+router.get('/chatbot/flows/:id', authMiddleware, getChatbotFlow);
+router.post('/chatbot/flows', authMiddleware, adminOnly, createChatbotFlow);
+router.put('/chatbot/flows/:id', authMiddleware, adminOnly, updateChatbotFlow);
+router.delete('/chatbot/flows/:id', authMiddleware, adminOnly, deleteChatbotFlow);
+router.get('/chatbot/flows/:id/stats', authMiddleware, adminOnly, getChatbotFlowStats);
+router.post('/chatbot/flows/:id/test', authMiddleware, adminOnly, testChatbotFlow);
+
+// Automations
+router.get('/automations', authMiddleware, adminOnly, listAutomationRules);
+router.get('/automations/:id', authMiddleware, adminOnly, getAutomationRule);
+router.post('/automations', authMiddleware, adminOnly, createAutomationRule);
+router.put('/automations/:id', authMiddleware, adminOnly, updateAutomationRule);
+router.delete('/automations/:id', authMiddleware, adminOnly, deleteAutomationRule);
+router.post('/automations/:id/toggle', authMiddleware, adminOnly, toggleAutomationRule);
+router.post('/automations/:id/test', authMiddleware, adminOnly, testAutomationRuleHandler);
+router.get('/automation-logs', authMiddleware, adminOnly, listAutomationLogs);
+
+// Reports
+router.get('/reports', authMiddleware, getAdvancedReport);
+router.get('/reports/export', authMiddleware, exportAdvancedReport);
+router.get('/reports/schedules', authMiddleware, listReportSchedulesHandler);
+router.post('/reports/schedules', authMiddleware, createReportScheduleHandler);
+router.put('/reports/schedules/:id', authMiddleware, updateReportScheduleHandler);
+router.delete('/reports/schedules/:id', authMiddleware, deleteReportScheduleHandler);
+router.post('/reports/schedules/:id/run', authMiddleware, runReportScheduleHandler);
+router.get('/reports/snapshots', authMiddleware, listReportSnapshotsHandler);
+router.get('/reports/snapshots/:id/download', authMiddleware, downloadReportSnapshotHandler);
+
+// Satisfaction
+router.get('/satisfaction/overview', authMiddleware, getSatisfactionOverview);
+router.get('/satisfaction/responses', authMiddleware, listSatisfactionResponsesHandler);
 
 export default router;

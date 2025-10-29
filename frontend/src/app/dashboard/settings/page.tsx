@@ -5,7 +5,9 @@ import toast from 'react-hot-toast';
 import Sidebar from '@/components/layout/Sidebar';
 import GeneralSettingsForm, { GeneralSettingsValues } from '@/components/settings/GeneralSettingsForm';
 import ServiceSettingsForm, { ServiceSettingsValues } from '@/components/settings/ServiceSettingsForm';
-import NotificationSettingsForm, { NotificationSettingsValues } from '@/components/settings/NotificationSettingsForm';
+import NotificationSettingsForm, {
+  NotificationSettingsValues
+} from '@/components/settings/NotificationSettingsForm';
 import IntegrationSettings from '@/components/settings/IntegrationSettings';
 import WhatsAppConnectionsSection from '@/components/settings/WhatsAppConnectionsSection';
 import QueueSettingsSection from '@/components/settings/QueueSettingsSection';
@@ -13,7 +15,9 @@ import TagSettingsSection from '@/components/settings/TagSettingsSection';
 import { QuickReplySettingsSection } from '@/components/settings/QuickReplySettingsSection';
 import { useAuthStore } from '@/store/authStore';
 import { useMetadataStore } from '@/store/metadataStore';
-import { useNotificationStore } from '@/store/notificationStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useI18n } from '@/providers/I18nProvider';
+import type { LanguageCode } from '@/i18n/dictionaries';
 import { useRouter } from 'next/navigation';
 
 type WebhookConfig = {
@@ -31,18 +35,36 @@ type ApiLog = {
   timestamp: string;
 };
 
-const initialGeneral: GeneralSettingsValues = {
-  companyName: 'WhatsKovi Atendimento',
-  brandColor: '#FF355A',
-  accentColor: '#7C3AED',
-  language: 'pt-BR',
-  timezone: 'America/Sao_Paulo',
-  dateFormat: 'dd/MM/yyyy HH:mm',
-  logoUrl: null
+const DEFAULT_SERVICE_SETTINGS: ServiceSettingsValues = {
+  inactivityMinutes: 15,
+  autoCloseHours: 12,
+  autoCloseMessage:
+    'Encerramos este atendimento após um período sem respostas. Caso precise de ajuda novamente, estamos por aqui!',
+  globalTicketLimit: 400,
+  perAgentTicketLimit: 25,
+  soundEnabled: true,
+  satisfactionSurveyEnabled: true
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettingsValues = {
+  notifyNewTicket: true,
+  notifyTicketMessage: true,
+  notifyTransfer: true,
+  pushEnabled: false,
+  emailEnabled: false,
+  soundEnabled: true,
+  soundTheme: 'classic',
+  smtpHost: '',
+  smtpPort: 587,
+  smtpUser: '',
+  smtpPassword: '',
+  smtpFrom: '',
+  smtpSecure: true
 };
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { t, setLanguage, setSupportedLanguages } = useI18n();
   const { isAuthenticated, loadUser } = useAuthStore();
   const queues = useMetadataStore((state) => state.queues);
   const tags = useMetadataStore((state) => state.tags);
@@ -55,43 +77,44 @@ export default function SettingsPage() {
   const updateTag = useMetadataStore((state) => state.updateTag);
   const deleteTag = useMetadataStore((state) => state.deleteTag);
   const {
-    preferences: notificationPreferences,
-    savePreferences: saveNotificationPreferences,
-    togglePush,
-    fetchPreferences: fetchNotificationPreferences
-  } = useNotificationStore((state) => ({
-    preferences: state.preferences,
-    savePreferences: state.savePreferences,
-    togglePush: state.togglePush,
-    fetchPreferences: state.fetchPreferences
+    general,
+    service,
+    notifications,
+    loading,
+    initialized,
+    savingGeneral,
+    savingService,
+    savingNotifications,
+    fetch: fetchSettings,
+    saveGeneral,
+    saveService,
+    saveNotifications,
+    uploadLogo,
+    removeLogo
+  } = useSettingsStore((state) => ({
+    general: state.general,
+    service: state.service,
+    notifications: state.notifications,
+    loading: state.loading,
+    initialized: state.initialized,
+    savingGeneral: state.savingGeneral,
+    savingService: state.savingService,
+    savingNotifications: state.savingNotifications,
+    fetch: state.fetch,
+    saveGeneral: state.saveGeneral,
+    saveService: state.saveService,
+    saveNotifications: state.saveNotifications,
+    uploadLogo: state.uploadLogo,
+    removeLogo: state.removeLogo
   }));
 
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettingsValues>(initialGeneral);
-  const [serviceSettings, setServiceSettings] = useState<ServiceSettingsValues>({
-    inactivityMinutes: 15,
-    autoCloseHours: 12,
-    autoCloseMessage:
-      'Encerramos este atendimento apos um periodo sem respostas. Caso precise de ajuda novamente, estamos por aqui!',
-    globalTicketLimit: 400,
-    perAgentTicketLimit: 25,
-    soundEnabled: true,
-    satisfactionSurveyEnabled: true
-  });
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettingsValues>({
-    notifyNewTicket: true,
-    notifyTicketMessage: true,
-    notifyTransfer: true,
-    pushEnabled: false,
-    emailEnabled: false,
-    soundEnabled: true,
-    soundTheme: 'classic',
-    smtpHost: '',
-    smtpPort: 587,
-    smtpUser: '',
-    smtpPassword: '',
-    smtpFrom: '',
-    smtpSecure: true
-  });
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettingsValues | null>(null);
+  const [serviceSettings, setServiceSettings] =
+    useState<ServiceSettingsValues | null>(DEFAULT_SERVICE_SETTINGS);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettingsValues | null>(
+    DEFAULT_NOTIFICATION_SETTINGS
+  );
+  const [supportedLanguagesState, setSupportedLanguagesState] = useState<string[]>([]);
   const [apiToken, setApiToken] = useState('');
   const [webhooks] = useState<WebhookConfig[]>([
     {
@@ -120,40 +143,9 @@ export default function SettingsPage() {
     { id: 'log-4', method: 'POST', path: '/api/webhooks/new-message', status: 401, timestamp: '17/10/2025 12:21' }
   ]);
 
-  const [generalSaving, setGeneralSaving] = useState(false);
-  const [serviceSaving, setServiceSaving] = useState(false);
-  const [notificationSaving, setNotificationSaving] = useState(false);
-  const [logoObjectUrl, setLogoObjectUrl] = useState<string | null>(null);
-
   useEffect(() => {
     loadUser();
   }, [loadUser]);
-
-  useEffect(() => {
-    fetchNotificationPreferences();
-  }, [fetchNotificationPreferences]);
-
-  useEffect(() => {
-    if (!notificationPreferences) {
-      return;
-    }
-
-    setNotificationSettings({
-      notifyNewTicket: notificationPreferences.notifyNewTicket,
-      notifyTicketMessage: notificationPreferences.notifyTicketMessage,
-      notifyTransfer: notificationPreferences.notifyTransfer,
-      pushEnabled: notificationPreferences.pushEnabled,
-      emailEnabled: notificationPreferences.emailEnabled,
-      soundEnabled: notificationPreferences.soundEnabled,
-      soundTheme: (notificationPreferences.soundTheme as NotificationSettingsValues['soundTheme']) ?? 'classic',
-      smtpHost: notificationPreferences.smtpHost ?? '',
-      smtpPort: notificationPreferences.smtpPort ?? 587,
-      smtpUser: notificationPreferences.smtpUser ?? '',
-      smtpPassword: notificationPreferences.smtpPassword ?? '',
-      smtpFrom: notificationPreferences.smtpFrom ?? '',
-      smtpSecure: notificationPreferences.smtpSecure
-    });
-  }, [notificationPreferences]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -165,93 +157,159 @@ export default function SettingsPage() {
     if (!isAuthenticated) return;
     fetchQueues();
     fetchTags();
-  }, [isAuthenticated, fetchQueues, fetchTags]);
+    if (!initialized) {
+      fetchSettings();
+    }
+  }, [isAuthenticated, fetchQueues, fetchTags, fetchSettings, initialized]);
 
   useEffect(() => {
-    return () => {
-      if (logoObjectUrl) {
-        URL.revokeObjectURL(logoObjectUrl);
-      }
-    };
-  }, [logoObjectUrl]);
+    if (!general) return;
+    setGeneralSettings({
+      companyName: general.companyName,
+      brandColor: general.brandColor,
+      accentColor: general.accentColor,
+      language: general.language,
+      timezone: general.timezone,
+      dateFormat: general.dateFormat,
+      logoUrl: general.logoUrl
+    });
+    setSupportedLanguagesState(general.supportedLanguages);
+    setSupportedLanguages(general.supportedLanguages);
+    setLanguage(general.language as LanguageCode, { persist: false });
+  }, [general, setLanguage, setSupportedLanguages]);
 
-  const ready = useMemo(() => isAuthenticated, [isAuthenticated]);
+  useEffect(() => {
+    if (!service) return;
+    setServiceSettings({
+      inactivityMinutes: service.inactivityMinutes,
+      autoCloseHours: service.autoCloseHours,
+      autoCloseMessage: service.autoCloseMessage,
+      globalTicketLimit: service.globalTicketLimit,
+      perAgentTicketLimit: service.perAgentTicketLimit,
+      soundEnabled: service.soundEnabled,
+      satisfactionSurveyEnabled: service.satisfactionSurveyEnabled
+    });
+  }, [service]);
+
+  useEffect(() => {
+    if (!notifications) return;
+    setNotificationSettings({
+      notifyNewTicket: notifications.notifyNewTicket,
+      notifyTicketMessage: notifications.notifyTicketMessage,
+      notifyTransfer: notifications.notifyTransfer,
+      pushEnabled: notifications.pushEnabled,
+      emailEnabled: notifications.emailEnabled,
+      soundEnabled: notifications.soundEnabled,
+      soundTheme: notifications.soundTheme as NotificationSettingsValues['soundTheme'],
+      smtpHost: notifications.smtpHost ?? '',
+      smtpPort: notifications.smtpPort ?? '',
+      smtpUser: notifications.smtpUser ?? '',
+      smtpPassword: notifications.smtpPassword ?? '',
+      smtpFrom: notifications.smtpFrom ?? '',
+      smtpSecure: notifications.smtpSecure
+    });
+  }, [notifications]);
+
+  const ready = useMemo(
+    () =>
+      isAuthenticated &&
+      !loading &&
+      Boolean(generalSettings && serviceSettings && notificationSettings),
+    [isAuthenticated, loading, generalSettings, serviceSettings, notificationSettings]
+  );
 
   const handleGeneralChange = <Key extends keyof GeneralSettingsValues>(
     key: Key,
     value: GeneralSettingsValues[Key]
   ) => {
-    setGeneralSettings((prev) => ({ ...prev, [key]: value }));
+    setGeneralSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
   const handleServiceChange = <Key extends keyof ServiceSettingsValues>(
     key: Key,
     value: ServiceSettingsValues[Key]
   ) => {
-    setServiceSettings((prev) => ({ ...prev, [key]: value }));
+    setServiceSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
   const handleNotificationChange = <Key extends keyof NotificationSettingsValues>(
     key: Key,
     value: NotificationSettingsValues[Key]
   ) => {
-    setNotificationSettings((prev) => ({ ...prev, [key]: value }));
+    setNotificationSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  const simulateSave = async (setLoading: (value: boolean) => void, message: string) => {
-    setLoading(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      toast.success(message);
-    } finally {
-      setLoading(false);
+  const handleGeneralSave = async () => {
+    if (!generalSettings) return;
+
+    const result = await saveGeneral({
+      ...generalSettings,
+      supportedLanguages: supportedLanguagesState
+    });
+
+    if (result) {
+      toast.success(t('settings.toasts.generalSaved'));
+      setLanguage(result.language as LanguageCode, { persist: false });
+      setSupportedLanguagesState(result.supportedLanguages);
+      setSupportedLanguages(result.supportedLanguages);
+    } else {
+      toast.error(t('settings.toasts.errorGeneric'));
     }
   };
 
-  const handleGeneralSave = () =>
-    simulateSave(setGeneralSaving, 'Configuracoes gerais atualizadas com sucesso.');
-
-  const handleServiceSave = () =>
-    simulateSave(setServiceSaving, 'Regras de atendimento salvas.');
+  const handleServiceSave = async () => {
+    if (!serviceSettings) return;
+    const result = await saveService(serviceSettings);
+    if (result) {
+      toast.success(t('settings.toasts.serviceSaved'));
+    } else {
+      toast.error(t('settings.toasts.errorGeneric'));
+    }
+  };
 
   const handleNotificationSave = async () => {
-    setNotificationSaving(true);
-    try {
-      if (notificationPreferences?.pushEnabled !== notificationSettings.pushEnabled) {
-        const toggled = await togglePush(notificationSettings.pushEnabled);
-        if (!toggled) {
-          setNotificationSettings((prev) => ({
-            ...prev,
-            pushEnabled: notificationPreferences?.pushEnabled ?? false
-          }));
-          throw new Error('PUSH_TOGGLE_FAILED');
-        }
-      }
+    if (!notificationSettings) return;
 
-      await saveNotificationPreferences({
-        notifyNewTicket: notificationSettings.notifyNewTicket,
-        notifyTicketMessage: notificationSettings.notifyTicketMessage,
-        notifyTransfer: notificationSettings.notifyTransfer,
-        emailEnabled: notificationSettings.emailEnabled,
-        soundEnabled: notificationSettings.soundEnabled,
-        soundTheme: notificationSettings.soundTheme,
-        smtpHost: notificationSettings.smtpHost.trim() || null,
-        smtpPort: notificationSettings.smtpPort,
-        smtpUser: notificationSettings.smtpUser.trim() || null,
-        smtpPassword: notificationSettings.smtpPassword.trim() || null,
-        smtpFrom: notificationSettings.smtpFrom.trim() || null,
-        smtpSecure: notificationSettings.smtpSecure
-      });
+    const payload = {
+      notifyNewTicket: notificationSettings.notifyNewTicket,
+      notifyTicketMessage: notificationSettings.notifyTicketMessage,
+      notifyTransfer: notificationSettings.notifyTransfer,
+      pushEnabled: notificationSettings.pushEnabled,
+      emailEnabled: notificationSettings.emailEnabled,
+      soundEnabled: notificationSettings.soundEnabled,
+      soundTheme: notificationSettings.soundTheme,
+      smtpHost: notificationSettings.smtpHost.trim() || null,
+      smtpPort:
+        notificationSettings.smtpPort === '' ? null : Number(notificationSettings.smtpPort),
+      smtpUser: notificationSettings.smtpUser.trim() || null,
+      smtpPassword: notificationSettings.smtpPassword.trim() || null,
+      smtpFrom: notificationSettings.smtpFrom.trim() || null,
+      smtpSecure: notificationSettings.smtpSecure
+    };
 
-      toast.success('Preferências de notificações salvas.');
-    } catch (error) {
-      if (error instanceof Error && error.message === 'PUSH_TOGGLE_FAILED') {
-        toast.error('Não foi possível atualizar as notificações push.');
-      } else {
-        toast.error('Erro ao salvar preferências de notificações.');
-      }
-    } finally {
-      setNotificationSaving(false);
+    const result = await saveNotifications(payload);
+    if (result) {
+      toast.success(t('settings.toasts.notificationsSaved'));
+    } else {
+      toast.error(t('settings.toasts.errorGeneric'));
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    const success = await uploadLogo(file);
+    if (success) {
+      toast.success(t('settings.toasts.logoUploaded'));
+    } else {
+      toast.error(t('settings.toasts.errorGeneric'));
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    const success = await removeLogo();
+    if (success) {
+      toast.success(t('settings.toasts.logoRemoved'));
+    } else {
+      toast.error(t('settings.toasts.errorGeneric'));
     }
   };
 
@@ -262,6 +320,7 @@ export default function SettingsPage() {
     greetingMessage?: string;
     outOfHoursMessage?: string;
     priority?: number;
+    userIds?: string[];
   }) => {
     await createQueue(payload);
   };
@@ -299,16 +358,6 @@ export default function SettingsPage() {
     await deleteTag(id);
   };
 
-  const handleLogoUpload = (file: File) => {
-    if (logoObjectUrl) {
-      URL.revokeObjectURL(logoObjectUrl);
-    }
-    const url = URL.createObjectURL(file);
-    setLogoObjectUrl(url);
-    setGeneralSettings((prev) => ({ ...prev, logoUrl: url }));
-    toast.success('Logo carregado com sucesso.');
-  };
-
   const handleGenerateToken = () => {
     const randomPart =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -316,10 +365,10 @@ export default function SettingsPage() {
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
     const token = randomPart.padEnd(32, 'x').slice(0, 32);
     setApiToken(token);
-    toast.success('Novo token de acesso gerado.');
+    toast.success(t('settings.integration.tokenGenerated'));
   };
 
-  if (!ready) {
+  if (!ready || !generalSettings || !serviceSettings || !notificationSettings) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="h-12 w-12 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -334,36 +383,36 @@ export default function SettingsPage() {
         <div className="mx-auto max-w-6xl space-y-8 px-8 py-10">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Configuracoes do sistema</h1>
-              <p className="text-sm text-gray-500">
-                Ajuste branding, SLA, notificacoes e integracoes globais da plataforma.
-              </p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h1>
+              <p className="text-sm text-gray-500">{t('settings.subtitle')}</p>
             </div>
             <div className="rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-semibold text-primary">
-              Somente administradores podem alterar estas configuracoes
+              {t('settings.adminOnly')}
             </div>
           </header>
 
           <GeneralSettingsForm
             values={generalSettings}
+            supportedLanguages={supportedLanguagesState}
             onChange={handleGeneralChange}
             onUploadLogo={handleLogoUpload}
+            onRemoveLogo={generalSettings.logoUrl ? handleRemoveLogo : undefined}
             onSave={handleGeneralSave}
-            saving={generalSaving}
+            saving={savingGeneral}
           />
 
           <ServiceSettingsForm
             values={serviceSettings}
             onChange={handleServiceChange}
             onSave={handleServiceSave}
-            saving={serviceSaving}
+            saving={savingService}
           />
 
           <NotificationSettingsForm
             values={notificationSettings}
             onChange={handleNotificationChange}
             onSave={handleNotificationSave}
-            saving={notificationSaving}
+            saving={savingNotifications}
           />
 
           <WhatsAppConnectionsSection />
@@ -378,9 +427,9 @@ export default function SettingsPage() {
           <TagSettingsSection
             tags={tags}
             onCreateTag={handleCreateTag}
-          onUpdateTag={handleUpdateTag}
-          onDeleteTag={handleDeleteTag}
-        />
+            onUpdateTag={handleUpdateTag}
+            onDeleteTag={handleDeleteTag}
+          />
 
           <QuickReplySettingsSection />
 
