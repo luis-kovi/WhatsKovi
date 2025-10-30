@@ -99,6 +99,12 @@ import {
   testChatbotFlow
 } from '../controllers/chatbotController';
 import {
+  listScheduledMessagesHandler,
+  createScheduledMessageHandler,
+  updateScheduledMessageHandler,
+  cancelScheduledMessageHandler
+} from '../controllers/scheduledMessageController';
+import {
   listAutomationRules,
   getAutomationRule,
   createAutomationRule,
@@ -168,6 +174,12 @@ router.put('/messages/:id', authMiddleware, updateMessage);
 router.delete('/messages/:id', authMiddleware, deleteMessage);
 router.post('/messages/:id/reactions', authMiddleware, addReaction);
 router.delete('/messages/:id/reactions/:reactionId', authMiddleware, removeReaction);
+
+// Scheduled messages routes
+router.get('/tickets/:ticketId/scheduled-messages', authMiddleware, listScheduledMessagesHandler);
+router.post('/tickets/:ticketId/scheduled-messages', authMiddleware, createScheduledMessageHandler);
+router.put('/scheduled-messages/:id', authMiddleware, updateScheduledMessageHandler);
+router.delete('/scheduled-messages/:id', authMiddleware, cancelScheduledMessageHandler);
 
 // Queue routes
 router.get('/queues', authMiddleware, listQueues);

@@ -309,17 +309,17 @@
 ### 6. Mensagens Agendadas
 
 #### Backend
-- [ ] Agendamento de mensagens
-- [ ] Fila de envio (Bull)
-- [ ] Cancelamento de agendamentos
-- [ ] Recorrência
-- [ ] Logs de envios
+- [✅] Agendamento de mensagens
+- [✅] Fila de envio (Bull)
+- [✅] Cancelamento de agendamentos
+- [✅] Recorrência
+- [✅] Logs de envios
 
 #### Frontend
-- [ ] Interface de agendamento
-- [ ] Calendário visual
-- [ ] Lista de agendamentos
-- [ ] Edição de agendamentos
+- [✅] Interface de agendamento
+- [✅] Calendário visual
+- [✅] Lista de agendamentos
+- [✅] Edição de agendamentos
 
 **Prioridade:** Baixa
 **Complexidade:** Média
@@ -365,36 +365,19 @@
 
 ### 2. Integrações
 
-- [ ] CRM (Salesforce, HubSpot)
-- [ ] E-commerce (Shopify, WooCommerce)
-- [ ] Pagamentos (Stripe, PayPal)
 - [ ] Analytics (Google Analytics)
 - [ ] Zapier
+- [ ] N8N
 
 **Prioridade:** Média
-**Complexidade:** Alta
+**Complexidade:** Média
 
 ---
 
 ### 3. Multi-canal
 
-- [ ] Telegram
-- [ ] Instagram Direct
-- [ ] Facebook Messenger
 - [ ] Email
 - [ ] SMS
-
-**Prioridade:** Baixa
-**Complexidade:** Muito Alta
-
----
-
-### 4. Mobile App
-
-- [ ] App React Native
-- [ ] Notificações push nativas
-- [ ] Offline first
-- [ ] Sincronização
 
 **Prioridade:** Baixa
 **Complexidade:** Muito Alta
@@ -472,7 +455,7 @@
 1. Sistema de Tags
 2. Respostas Rápidas
 3. Dashboard com Métricas
-4. ✅ Sistema de Notificações
+4. Sistema de Notificações
 5. Gestão de Contatos
 6. Busca Avançada
 7. Modo Escuro

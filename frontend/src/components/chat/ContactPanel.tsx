@@ -7,6 +7,7 @@ import { StickyNote, Plus, X, Clock3, Phone, User, Tags, ChevronRight } from 'lu
 import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote } from '@/store/contactStore';
 import { useMessages } from '@/hooks/useMessages';
+import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendente',
@@ -356,6 +357,8 @@ export default function ContactPanel() {
                 {selectedContact.isBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
               </button>
             </div>
+
+            <ScheduledMessageSection ticketId={selectedTicket.id} contactName={contactName} />
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">

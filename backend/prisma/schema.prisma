@@ -48,6 +48,26 @@ enum MessageStatus {
   READ
 }
 
+enum ScheduledMessageRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ScheduledMessageStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  COMPLETED
+}
+
+enum ScheduledMessageLogStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
 enum NotificationType {
   NEW_TICKET
   TICKET_MESSAGE
@@ -138,6 +158,7 @@ model User {
   exportJobs        ExportJob[]
   reportSchedules   ReportSchedule[]
   reportSnapshots   ReportSnapshot[]
+  scheduledMessages ScheduledMessage[]
   satisfactionSurveys SatisfactionSurvey[] @relation("SurveyAgent")
 
   @@map("users")
@@ -244,6 +265,7 @@ model Ticket {
   exportJobs        ExportJob[]
   chatbotSessions   ChatbotSession[]
   satisfactionSurvey SatisfactionSurvey?
+  scheduledMessages ScheduledMessage[]
   
   @@map("tickets")
 }
@@ -301,6 +323,7 @@ model Message {
   quotedMessage     Message?     @relation("MessageQuote", fields: [quotedMsgId], references: [id])
   replies           Message[]    @relation("MessageQuote")
   reactions         MessageReaction[]
+  scheduledLogs     ScheduledMessageLog[]
   
   @@map("messages")
 }
@@ -317,6 +340,52 @@ model MessageReaction {
 
   @@unique([messageId, userId, emoji])
   @@map("message_reactions")
+}
+
+model ScheduledMessage {
+  id            String                     @id @default(uuid())
+  ticketId      String
+  userId        String
+  body          String
+  type          MessageType                @default(TEXT)
+  mediaUrl      String?
+  isPrivate     Boolean                    @default(false)
+  recurrence    ScheduledMessageRecurrence @default(NONE)
+  weekdays      String[]                   @default([])
+  dayOfMonth    Int?
+  timezone      String                     @default("UTC")
+  status        ScheduledMessageStatus     @default(ACTIVE)
+  scheduledFor  DateTime
+  lastRunAt     DateTime?
+  nextRunAt     DateTime?
+  jobId         String?
+  cancelReason  String?
+  cancelledAt   DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  ticket        Ticket                     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user          User                       @relation(fields: [userId], references: [id])
+  logs          ScheduledMessageLog[]
+
+  @@index([status])
+  @@index([nextRunAt])
+  @@map("scheduled_messages")
+}
+
+model ScheduledMessageLog {
+  id                 String                     @id @default(uuid())
+  scheduledMessageId String
+  messageId          String?
+  status             ScheduledMessageLogStatus   @default(SUCCESS)
+  error              String?
+  runAt              DateTime                    @default(now())
+
+  scheduledMessage   ScheduledMessage            @relation(fields: [scheduledMessageId], references: [id], onDelete: Cascade)
+  message            Message?                    @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([scheduledMessageId, runAt])
+  @@map("scheduled_message_logs")
 }
 
 model Tag {
