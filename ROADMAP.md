@@ -329,17 +329,17 @@
 ### 7. Campanhas de Mensagens
 
 #### Backend
-- [ ] Criação de campanhas
-- [ ] Seleção de destinatários
-- [ ] Agendamento de envio
-- [ ] Limitação de taxa
-- [ ] Estatísticas de campanha
+- ✅ Criação de campanhas
+- ✅ Seleção de destinatários
+- ✅ Agendamento de envio
+- ✅ Limitação de taxa
+- ✅ Estatísticas de campanha
 
 #### Frontend
-- [ ] Criador de campanhas
-- [ ] Seleção de contatos
-- [ ] Preview de mensagem
-- [ ] Acompanhamento de envio
+- ✅ Criador de campanhas
+- ✅ Seleção de contatos
+- ✅ Preview de mensagem
+- ✅ Acompanhamento de envio
 
 **Prioridade:** Baixa
 **Complexidade:** Alta

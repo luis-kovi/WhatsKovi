@@ -1,3 +1,4 @@
+import { AutomationTrigger } from '@prisma/client';
 import { Response } from 'express';
 import prisma from '../config/database';
 import { AuthRequest } from '../middleware/auth';
@@ -12,6 +13,8 @@ import {
   validateTagIdentifiers
 } from '../services/tagAutomation';
 import { notifyNewTicketCreated, notifyTicketTransferred } from '../services/notificationTriggers';
+import { triggerSurveyForTicket } from '../services/satisfactionSurveyService';
+import { runAutomations } from '../services/automationService';
 
 export const listTickets = async (req: AuthRequest, res: Response) => {
   try {
@@ -151,9 +154,21 @@ export const closeTicket = async (req: AuthRequest, res: Response) => {
       include: ticketInclude
     });
 
-    io.emit('ticket:update', ticket);
+    triggerSurveyForTicket(id, { autoSend: true }).catch((error) => {
+      console.error('Erro ao acionar pesquisa de satisfacao:', error);
+    });
 
-    return res.json(ticket);
+    await runAutomations(AutomationTrigger.TICKET_STATUS_CHANGED, { ticketId: id });
+
+    const updatedTicket =
+      (await prisma.ticket.findUnique({
+        where: { id },
+        include: ticketInclude
+      })) ?? ticket;
+
+    io.emit('ticket:update', updatedTicket);
+
+    return res.json(updatedTicket);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao fechar ticket' });
   }
@@ -172,9 +187,17 @@ export const reopenTicket = async (req: AuthRequest, res: Response) => {
       include: ticketInclude
     });
 
-    io.emit('ticket:update', ticket);
+    await runAutomations(AutomationTrigger.TICKET_STATUS_CHANGED, { ticketId: id });
 
-    return res.json(ticket);
+    const updatedTicket =
+      (await prisma.ticket.findUnique({
+        where: { id },
+        include: ticketInclude
+      })) ?? ticket;
+
+    io.emit('ticket:update', updatedTicket);
+
+    return res.json(updatedTicket);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao reabrir ticket' });
   }
@@ -329,6 +352,8 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
     if (requestedTags.length > 0) {
       await appendTagsToTicket(ticket.id, requestedTags);
     }
+
+    await runAutomations(AutomationTrigger.TICKET_CREATED, { ticketId: ticket.id });
 
     const fullTicket = await prisma.ticket.findUnique({
       where: { id: ticket.id },

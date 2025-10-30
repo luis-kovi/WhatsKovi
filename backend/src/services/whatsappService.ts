@@ -2,10 +2,13 @@ import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import fs from 'fs';
 import path from 'path';
 import qrcode from 'qrcode';
+import { AutomationTrigger } from '@prisma/client';
 import prisma from '../config/database';
 import { io } from '../server';
 import { applyAutomaticTagsToTicket } from './tagAutomation';
 import { notifyIncomingTicketMessage, notifyNewTicketCreated } from './notificationTriggers';
+import { processIncomingMessageForChatbot } from './chatbotEngine';
+import { runAutomations } from './automationService';
 
 interface WhatsAppClient {
   id: string;
@@ -31,6 +34,17 @@ const storeIncomingMedia = (data: string, mimetype?: string | null) => {
   fs.writeFileSync(filePath, Buffer.from(data, 'base64'));
   return { filename, url: `/uploads/${filename}`, absolutePath: filePath };
 };
+
+const ticketResponseInclude = {
+  contact: true,
+  user: { select: { id: true, name: true, avatar: true } },
+  queue: true,
+  tags: { include: { tag: true } },
+  messages: {
+    orderBy: { createdAt: 'desc' },
+    take: 1
+  }
+} as const;
 
 export const initializeWhatsApp = async (connectionId: string) => {
   try {
@@ -171,24 +185,29 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
 
       ticket = await prisma.ticket.findUnique({
         where: { id: createdTicket.id },
-        include: {
-          contact: true,
-          user: { select: { id: true, name: true, avatar: true } },
-          queue: true,
-          tags: { include: { tag: true } },
-          messages: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
-          }
-        }
+        include: ticketResponseInclude
       });
 
       if (!ticket) {
         return;
       }
 
+      await runAutomations(AutomationTrigger.TICKET_CREATED, { ticketId: ticket.id });
+
+      ticket =
+        (await prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: ticketResponseInclude
+        })) ?? ticket;
+
       io.emit('ticket:new', ticket);
       await notifyNewTicketCreated(ticket);
+    } else {
+      ticket =
+        (await prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: ticketResponseInclude
+        })) ?? ticket;
     }
 
     let mediaUrl: string | undefined;
@@ -230,8 +249,20 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
 
     await applyAutomaticTagsToTicket(ticket.id, prismaMessage.body ?? '');
 
+    await runAutomations(AutomationTrigger.MESSAGE_RECEIVED, {
+      ticketId: ticket.id,
+      messageId: prismaMessage.id
+    });
+
+    ticket =
+      (await prisma.ticket.findUnique({
+        where: { id: ticket.id },
+        include: ticketResponseInclude
+      })) ?? ticket;
+
     io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
     await notifyIncomingTicketMessage(ticket, prismaMessage.body ?? '', { actorId: null });
+    await processIncomingMessageForChatbot({ ticketId: ticket.id, messageId: prismaMessage.id });
   } catch (error) {
     console.error('Erro ao processar mensagem:', error);
   }

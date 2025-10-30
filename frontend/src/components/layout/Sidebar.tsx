@@ -12,7 +12,8 @@ import {
   Search,
   Bot,
   Smile,
-  Workflow
+  Workflow,
+  Megaphone
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import NotificationBell from '@/components/notifications/NotificationBell';
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'nav.users', icon: UserCog, href: '/dashboard/users', adminOnly: true },
   { key: 'nav.chatbot', icon: Bot, href: '/dashboard/chatbot', adminOnly: true },
   { key: 'nav.automations', icon: Workflow, href: '/dashboard/automations', adminOnly: true },
+  { key: 'nav.campaigns', icon: Megaphone, href: '/dashboard/campaigns', adminOnly: true },
   { key: 'nav.reports', icon: BarChart3, href: '/dashboard/reports', adminOnly: true },
   { key: 'nav.satisfaction', icon: Smile, href: '/dashboard/satisfaction', adminOnly: true },
   { key: 'nav.settings', icon: Settings, href: '/dashboard/settings', adminOnly: true }

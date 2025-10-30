@@ -10,6 +10,7 @@ import { registerNotificationSocketServer } from './services/notificationQueue';
 import './services/exportQueue';
 import { bootstrapReportSchedules } from './services/reportScheduleService';
 import { bootstrapScheduledMessages } from './services/scheduledMessageService';
+import { bootstrapMessageCampaigns } from './services/messageCampaignService';
 
 dotenv.config();
 
@@ -45,6 +46,9 @@ httpServer.listen(PORT, () => {
   });
   bootstrapScheduledMessages().catch((error) => {
     console.error('Failed to bootstrap scheduled messages:', error);
+  });
+  bootstrapMessageCampaigns().catch((error) => {
+    console.error('Failed to bootstrap message campaigns:', error);
   });
 });
 

@@ -126,6 +126,17 @@ import {
   downloadReportSnapshotHandler
 } from '../controllers/reportController';
 import {
+  listCampaignController,
+  getCampaignController,
+  createCampaignController,
+  updateCampaignController,
+  pauseCampaignController,
+  resumeCampaignController,
+  cancelCampaignController,
+  campaignStatsController,
+  campaignRecipientsController
+} from '../controllers/messageCampaignController';
+import {
   getSatisfactionOverview,
   listSatisfactionResponsesHandler,
   getTicketSurveyStatus,
@@ -180,6 +191,17 @@ router.get('/tickets/:ticketId/scheduled-messages', authMiddleware, listSchedule
 router.post('/tickets/:ticketId/scheduled-messages', authMiddleware, createScheduledMessageHandler);
 router.put('/scheduled-messages/:id', authMiddleware, updateScheduledMessageHandler);
 router.delete('/scheduled-messages/:id', authMiddleware, cancelScheduledMessageHandler);
+
+// Message campaign routes
+router.get('/message-campaigns', authMiddleware, adminOnly, listCampaignController);
+router.get('/message-campaigns/:id', authMiddleware, adminOnly, getCampaignController);
+router.post('/message-campaigns', authMiddleware, adminOnly, createCampaignController);
+router.put('/message-campaigns/:id', authMiddleware, adminOnly, updateCampaignController);
+router.post('/message-campaigns/:id/pause', authMiddleware, adminOnly, pauseCampaignController);
+router.post('/message-campaigns/:id/resume', authMiddleware, adminOnly, resumeCampaignController);
+router.post('/message-campaigns/:id/cancel', authMiddleware, adminOnly, cancelCampaignController);
+router.get('/message-campaigns/:id/stats', authMiddleware, adminOnly, campaignStatsController);
+router.get('/message-campaigns/:id/recipients', authMiddleware, adminOnly, campaignRecipientsController);
 
 // Queue routes
 router.get('/queues', authMiddleware, listQueues);

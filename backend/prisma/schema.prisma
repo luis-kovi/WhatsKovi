@@ -68,6 +68,39 @@ enum ScheduledMessageLogStatus {
   SKIPPED
 }
 
+enum MessageCampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum MessageCampaignRecipientStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum MessageCampaignLogType {
+  CREATED
+  UPDATED
+  SCHEDULED
+  STARTED
+  MESSAGE_SENT
+  MESSAGE_FAILED
+  PAUSED
+  RESUMED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
 enum NotificationType {
   NEW_TICKET
   TICKET_MESSAGE
@@ -160,6 +193,9 @@ model User {
   reportSnapshots   ReportSnapshot[]
   scheduledMessages ScheduledMessage[]
   satisfactionSurveys SatisfactionSurvey[] @relation("SurveyAgent")
+  createdCampaigns  MessageCampaign[]      @relation("MessageCampaignCreatedBy")
+  updatedCampaigns  MessageCampaign[]      @relation("MessageCampaignUpdatedBy")
+  campaignLogs      MessageCampaignLog[]   @relation("MessageCampaignLogUser")
 
   @@map("users")
 }
@@ -173,10 +209,11 @@ model WhatsAppConnection {
   isDefault         Boolean      @default(false)
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
-  
+
   tickets           Ticket[]
   satisfactionSurveys SatisfactionSurvey[]
-  
+  messageCampaigns  MessageCampaign[]
+
   @@map("whatsapp_connections")
 }
 
@@ -199,7 +236,8 @@ model Contact {
   notesHistory      ContactNote[]
   chatbotSessions   ChatbotSession[]
   satisfactionSurveys SatisfactionSurvey[]
-  
+  messageCampaignRecipients MessageCampaignRecipient[]
+
   @@map("contacts")
 }
 
@@ -220,7 +258,8 @@ model Queue {
   quickReplyUsages  QuickReplyUsage[]   @relation("QueueQuickReplyUsage")
   chatbotFlows      ChatbotFlow[]
   satisfactionSurveys SatisfactionSurvey[]
-  
+  messageCampaigns  MessageCampaign[]
+
   @@map("queues")
 }
 
@@ -266,7 +305,8 @@ model Ticket {
   chatbotSessions   ChatbotSession[]
   satisfactionSurvey SatisfactionSurvey?
   scheduledMessages ScheduledMessage[]
-  
+  messageCampaignRecipients MessageCampaignRecipient[]
+
   @@map("tickets")
 }
 
@@ -319,12 +359,13 @@ model Message {
   
   userId            String?
   user              User?        @relation(fields: [userId], references: [id])
-  
+
   quotedMessage     Message?     @relation("MessageQuote", fields: [quotedMsgId], references: [id])
   replies           Message[]    @relation("MessageQuote")
   reactions         MessageReaction[]
   scheduledLogs     ScheduledMessageLog[]
-  
+  campaignRecipients MessageCampaignRecipient[]
+
   @@map("messages")
 }
 
@@ -386,6 +427,85 @@ model ScheduledMessageLog {
 
   @@index([scheduledMessageId, runAt])
   @@map("scheduled_message_logs")
+}
+
+model MessageCampaign {
+  id                  String                    @id @default(uuid())
+  name                String
+  description         String?
+  body                String
+  mediaUrl            String?
+  status              MessageCampaignStatus      @default(DRAFT)
+  scheduledFor        DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  rateLimitPerMinute  Int                        @default(30)
+  totalRecipients     Int                        @default(0)
+  sentCount           Int                        @default(0)
+  failedCount         Int                        @default(0)
+  skippedCount        Int                        @default(0)
+  cancelledCount      Int                        @default(0)
+  whatsappId          String
+  queueId             String?
+  createdById         String
+  updatedById         String?
+  filters             Json?
+  jobId               String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  whatsapp            WhatsAppConnection         @relation(fields: [whatsappId], references: [id])
+  queue               Queue?                     @relation(fields: [queueId], references: [id])
+  createdBy           User                       @relation("MessageCampaignCreatedBy", fields: [createdById], references: [id])
+  updatedBy           User?                      @relation("MessageCampaignUpdatedBy", fields: [updatedById], references: [id])
+  recipients          MessageCampaignRecipient[]
+  logs                MessageCampaignLog[]
+
+  @@map("message_campaigns")
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+model MessageCampaignRecipient {
+  id          String                         @id @default(uuid())
+  campaignId  String
+  contactId   String
+  ticketId    String?
+  messageId   String?
+  status      MessageCampaignRecipientStatus @default(PENDING)
+  error       String?
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  createdAt   DateTime                      @default(now())
+  updatedAt   DateTime                      @updatedAt
+
+  campaign    MessageCampaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact     Contact                       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  ticket      Ticket?                       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  message     Message?                      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId, status])
+  @@map("message_campaign_recipients")
+}
+
+model MessageCampaignLog {
+  id          String                @id @default(uuid())
+  campaignId  String
+  type        MessageCampaignLogType
+  message     String?
+  context     Json?
+  createdById String?
+  createdAt   DateTime              @default(now())
+
+  campaign    MessageCampaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdBy   User?                 @relation("MessageCampaignLogUser", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, createdAt])
+  @@map("message_campaign_logs")
 }
 
 model Tag {

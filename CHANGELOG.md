@@ -1,5 +1,22 @@
 # Changelog
 
+## [Sprint 8] - 2025-10-30
+
+### Added
+- Campanhas de mensagens (Fase 3.7): novos modelos Prisma (`message_campaigns`, `message_campaign_recipients`, `message_campaign_logs`), API REST (`/api/message-campaigns`) com fila Bull para agendamentos, limitação de taxa, seleção por segmentos e estatísticas de envio.
+- Dashboard de campanhas no frontend (`/dashboard/campaigns`) com criador em etapas, seleção de contatos/segmentos, preview de mensagem, ações (pausar, retomar, cancelar) e acompanhamento detalhado por destinatário (`/dashboard/campaigns/[id]`).
+
+## [Sprint 7] - 2025-10-25
+
+### Added
+- Pesquisa de satisfacao completa: schema `satisfaction_surveys`, endpoints internos (`GET /api/satisfaction/overview`, `GET /api/satisfaction/responses`) e rotas publicas (`GET`/`POST /survey/:token`) com envio automatico via WhatsApp ao fechar tickets.
+- Dashboard de satisfacao no frontend (`/dashboard/satisfaction`) com filtros por periodo/fila/atendente, cards de NPS, distribuicao visual, ranking por fila/atendente e analise de comentarios com paginacao.
+- Widget publico de avaliacao (`/survey/:token`) responsivo, coleta nota 0-10 + comentario opcional e confirma resposta em tempo real.
+
+### Changed
+- Relatorio avancado passa a priorizar notas capturadas nas pesquisas em vez de heuristicas de mensagens, preservando compatibilidade com destaques de comentarios.
+- `ROADMAP.md` atualiza itens da Fase 3 - Pesquisa de Satisfacao com ✅ indicando entrega concluida.
+
 ## [Sprint 6] - 2025-10-18
 
 ### Added

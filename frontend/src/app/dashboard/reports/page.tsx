@@ -6,16 +6,16 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Sidebar from '@/components/layout/Sidebar';
 import ReportFilters, { ReportsFiltersState } from '@/components/reports/ReportFilters';
-import MetricsSummary from '@/components/dashboard/metrics/MetricsSummary';
-import MetricsTimeline from '@/components/dashboard/metrics/MetricsTimeline';
-import AgentPerformanceTable from '@/components/dashboard/metrics/AgentPerformanceTable';
-import QueuePerformanceTable from '@/components/dashboard/metrics/QueuePerformanceTable';
+import ReportHighlights from '@/components/reports/ReportHighlights';
+import ReportVisuals from '@/components/reports/ReportVisuals';
+import ReportDetailTables from '@/components/reports/ReportDetailTables';
 import { useAuthStore } from '@/store/authStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useUserStore } from '@/store/userStore';
-import { useDashboardMetricsStore } from '@/store/dashboardMetricsStore';
-import { exportMetrics } from '@/utils/exportMetrics';
+import { useReportStore } from '@/store/reportStore';
+import { exportAdvancedReport } from '@/utils/exportReport';
 import { formatDateRangeLabel, formatNumber } from '@/utils/formatMetrics';
+import type { ReportFiltersRequest } from '@/types/reports';
 
 const defaultFilters: ReportsFiltersState = {
   startDate: format(subDays(new Date(), 6), 'yyyy-MM-dd'),
@@ -27,13 +27,22 @@ const defaultFilters: ReportsFiltersState = {
   aggregation: 'day'
 };
 
-const mapFiltersToRequest = (filters: ReportsFiltersState) => ({
+const mapFiltersToRequest = (filters: ReportsFiltersState): ReportFiltersRequest => ({
   startDate: filters.startDate,
   endDate: filters.endDate,
-  interval: filters.aggregation,
+  aggregation: filters.aggregation,
   queueId: filters.queueId || undefined,
-  userId: filters.userId || undefined
+  userId: filters.userId || undefined,
+  tagId: filters.tagId || undefined,
+  status: filters.status || undefined
 });
+
+const SummaryCard = ({ label, value }: { label: string; value: string }) => (
+  <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <p className="text-xs font-semibold uppercase text-gray-500">{label}</p>
+    <p className="mt-3 text-2xl font-semibold text-gray-900">{value}</p>
+  </article>
+);
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -47,14 +56,18 @@ export default function ReportsPage() {
   const users = useUserStore((state) => state.users);
   const fetchUsers = useUserStore((state) => state.fetchUsers);
 
-  const metrics = useDashboardMetricsStore((state) => state.metrics);
-  const metricsLoading = useDashboardMetricsStore((state) => state.loading);
-  const metricsError = useDashboardMetricsStore((state) => state.error);
-  const fetchMetrics = useDashboardMetricsStore((state) => state.fetchMetrics);
+  const report = useReportStore((state) => state.report);
+  const reportLoading = useReportStore((state) => state.loading);
+  const reportError = useReportStore((state) => state.error);
+  const fetchReport = useReportStore((state) => state.fetchReport);
+  const fetchSnapshots = useReportStore((state) => state.fetchSnapshots);
+  const snapshots = useReportStore((state) => state.snapshots);
+  const snapshotsLoading = useReportStore((state) => state.snapshotsLoading);
 
   const [filters, setFilters] = useState<ReportsFiltersState>(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState<ReportsFiltersState>(defaultFilters);
   const [initializing, setInitializing] = useState(true);
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
 
   useEffect(() => {
     loadUser();
@@ -76,14 +89,16 @@ export default function ReportsPage() {
     (async () => {
       try {
         await Promise.all([fetchQueues(), fetchTags(), fetchUsers()]);
+        const request = mapFiltersToRequest(defaultFilters);
         if (!cancelled) {
-          await fetchMetrics(mapFiltersToRequest(defaultFilters));
+          await fetchReport(request);
+          await fetchSnapshots();
           setAppliedFilters({ ...defaultFilters });
         }
       } catch (error) {
-        console.error('Erro ao preparar dados do dashboard:', error);
+        console.error('Erro ao carregar dados do relatório:', error);
         if (!cancelled) {
-          toast.error('Não foi possível carregar os dados iniciais do dashboard.');
+          toast.error('Não foi possível carregar o relatório inicial.');
         }
       } finally {
         if (!cancelled) {
@@ -95,7 +110,7 @@ export default function ReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, fetchQueues, fetchTags, fetchUsers, fetchMetrics]);
+  }, [isAuthenticated, fetchQueues, fetchTags, fetchUsers, fetchReport, fetchSnapshots]);
 
   const handleFilterChange = <Key extends keyof ReportsFiltersState>(
     key: Key,
@@ -108,92 +123,79 @@ export default function ReportsPage() {
   };
 
   const handleApplyFilters = async () => {
+    const request = mapFiltersToRequest(filters);
     try {
-      await fetchMetrics(mapFiltersToRequest(filters));
+      await fetchReport(request);
       setAppliedFilters({ ...filters });
       toast.success('Filtros aplicados ao relatório.');
     } catch (error) {
-      console.error('Erro ao aplicar filtros no dashboard:', error);
-      toast.error('Não foi possível atualizar as métricas com os filtros selecionados.');
+      console.error('Erro ao aplicar filtros no relatório:', error);
+      toast.error('Não foi possível atualizar os dados.');
     }
   };
 
   const handleResetFilters = async () => {
     setFilters({ ...defaultFilters });
     setAppliedFilters({ ...defaultFilters });
+    const request = mapFiltersToRequest(defaultFilters);
 
     try {
-      await fetchMetrics(mapFiltersToRequest(defaultFilters));
+      await fetchReport(request);
       toast.success('Filtros redefinidos.');
     } catch (error) {
-      console.error('Erro ao redefinir filtros no dashboard:', error);
-      toast.error('Não foi possível recarregar as métricas padrão.');
+      console.error('Erro ao redefinir filtros:', error);
+      toast.error('Não foi possível carregar os dados padrão.');
     }
   };
 
-  const handleExportReport = (formatType: 'csv' | 'xlsx' | 'pdf') => {
-    if (!metrics) {
-      toast.error('Carregue as métricas antes de exportar.');
-      return;
-    }
-
+  const handleExportReport = async (format: 'csv' | 'xlsx' | 'pdf') => {
     try {
-      exportMetrics(formatType, metrics, mapFiltersToRequest(appliedFilters));
-      toast.success(`Exportação em ${formatType.toUpperCase()} concluída.`);
+      await exportAdvancedReport(format, mapFiltersToRequest(appliedFilters));
+      toast.success(`Relatório exportado em ${format.toUpperCase()}.`);
     } catch (error) {
-      console.error('Erro ao exportar métricas:', error);
-      toast.error('Não foi possível exportar as métricas.');
+      console.error('Erro ao exportar relatório:', error);
+      toast.error('Não foi possível exportar o relatório.');
     }
   };
 
   const rangeLabel = useMemo(() => {
-    if (!metrics) {
-      return null;
+    if (!report) {
+      return '';
     }
-    return formatDateRangeLabel(metrics.period.start, metrics.period.end);
-  }, [metrics]);
+    return formatDateRangeLabel(report.filters.startDate, report.filters.endDate);
+  }, [report]);
 
-  const operationalStats = useMemo(() => {
-    if (!metrics) {
+  const summaryCards = useMemo(() => {
+    if (!report) {
       return [];
     }
 
     return [
       {
-        key: 'open',
-        label: 'Tickets em aberto',
-        value: formatNumber(metrics.period.totals.open),
-        accent: 'bg-blue-100 text-blue-700'
+        label: 'Tickets criados',
+        value: formatNumber(report.totals.created)
       },
       {
-        key: 'pending',
-        label: 'Tickets pendentes',
-        value: formatNumber(metrics.period.totals.pending),
-        accent: 'bg-amber-100 text-amber-700'
+        label: 'Tickets resolvidos',
+        value: formatNumber(report.totals.closed)
       },
       {
-        key: 'messages',
-        label: 'Mensagens no período',
-        value: formatNumber(metrics.period.totals.messages),
-        accent: 'bg-purple-100 text-purple-700'
+        label: 'Em atendimento',
+        value: formatNumber(report.totals.open)
+      },
+      {
+        label: 'Pendentes',
+        value: formatNumber(report.totals.pending)
       }
     ];
-  }, [metrics]);
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-12 w-12 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+  }, [report]);
 
   if (initializing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="space-y-3 text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-gray-500">Preparando dados do dashboard de métricas...</p>
+          <p className="text-sm text-gray-500">Preparando dados avançados do relatório...</p>
         </div>
       </div>
     );
@@ -206,9 +208,10 @@ export default function ReportsPage() {
         <div className="mx-auto max-w-6xl space-y-8 px-8 py-10">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard com Métricas</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Relatórios Avançados</h1>
               <p className="text-sm text-gray-500">
-                Visualize indicadores-chave por período, fila e atendente, exporte dados e acompanhe evolução.
+                Combine filtros avançados para entender desempenho, produtividade e satisfação em
+                profundidade.
               </p>
             </div>
             {rangeLabel && (
@@ -218,9 +221,9 @@ export default function ReportsPage() {
             )}
           </header>
 
-          {metricsError && (
+          {reportError && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {metricsError}
+              {reportError}
             </div>
           )}
 
@@ -241,70 +244,110 @@ export default function ReportsPage() {
             ]}
           />
 
-          <MetricsSummary metrics={metrics} loading={metricsLoading} />
-
-          <section className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-            <MetricsTimeline metrics={metrics} />
-            <div className="flex flex-col gap-4">
-              <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h3 className="text-sm font-semibold uppercase text-gray-500">Status operacional</h3>
-                <p className="mt-1 text-xs text-gray-500">
-                  Indicadores de volume complementares aos filtros atuais.
-                </p>
-                <div className="mt-4 space-y-3">
-                  {operationalStats.map((stat) => (
-                    <div
-                      key={stat.key}
-                      className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
-                    >
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-gray-500">{stat.label}</p>
-                        <p className="text-lg font-semibold text-gray-900">{stat.value}</p>
-                      </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stat.accent}`}>
-                        Atualizado
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-              <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h3 className="text-sm font-semibold uppercase text-gray-500">Filtros aplicados</h3>
-                <dl className="mt-3 space-y-2 text-xs text-gray-600">
-                  <div className="flex items-center justify-between">
-                    <dt className="font-semibold text-gray-500">Agregação</dt>
-                    <dd className="capitalize text-gray-800">
-                      {appliedFilters.aggregation === 'day'
-                        ? 'Diária'
-                        : appliedFilters.aggregation === 'week'
-                        ? 'Semanal'
-                        : 'Mensal'}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="font-semibold text-gray-500">Fila</dt>
-                    <dd className="text-gray-800">
-                      {appliedFilters.queueId
-                        ? queues.find((queue) => queue.id === appliedFilters.queueId)?.name ?? 'Fila selecionada'
-                        : 'Todas'}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="font-semibold text-gray-500">Atendente</dt>
-                    <dd className="text-gray-800">
-                      {appliedFilters.userId
-                        ? users.find((user) => user.id === appliedFilters.userId)?.name ?? 'Atendente selecionado'
-                        : 'Todos'}
-                    </dd>
-                  </div>
-                </dl>
-              </article>
+          {reportLoading && (
+            <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white/80 p-10 shadow-sm">
+              <div className="space-y-2 text-center">
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-sm text-gray-500">Atualizando visão do relatório...</p>
+              </div>
             </div>
+          )}
+
+          {report && (
+            <>
+              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {summaryCards.map((card) => (
+                  <SummaryCard key={card.label} label={card.label} value={card.value} />
+                ))}
+              </section>
+
+              <ReportHighlights
+                metrics={report.highlights.metrics}
+                serviceLevels={report.highlights.serviceLevels}
+              />
+
+              <ReportVisuals
+                timeline={report.visuals.timeline}
+                queues={report.visuals.queues}
+                agents={report.visuals.agents}
+                tags={report.visuals.tags}
+                heatmap={report.visuals.heatmap}
+              />
+
+              <ReportDetailTables
+                responseMetrics={report.details.responseMetrics}
+                productivity={report.details.productivity}
+                conversations={report.details.conversations}
+                satisfaction={report.details.satisfaction}
+              />
+            </>
+          )}
+
+          <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <header className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold uppercase text-gray-500">
+                  Relatórios gerados automaticamente
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Acesse rapidamente os relatórios gerados pelos agendamentos configurados.
+                </p>
+              </div>
+            </header>
+
+            {snapshotsLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            ) : snapshots.length === 0 ? (
+              <p className="text-xs text-gray-500">
+                Nenhum relatório agendado foi gerado ainda. Configure um agendamento para receber
+                relatórios recorrentes.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wide text-gray-500">
+                      <th className="px-4 py-3 text-left">Relatório</th>
+                      <th className="px-4 py-3 text-left">Formato</th>
+                      <th className="px-4 py-3 text-left">Gerado em</th>
+                      <th className="px-4 py-3 text-left">Origem</th>
+                      <th className="px-4 py-3 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {snapshots.map((snapshot) => (
+                      <tr key={snapshot.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-semibold text-gray-900">
+                          {snapshot.summary?.totals
+                            ? 'Relatório agendado'
+                            : snapshot.fileName.replace(/\.(zip|pdf|csv|xlsx)$/i, '')}
+                        </td>
+                        <td className="px-4 py-3 text-xs uppercase text-gray-500">
+                          {snapshot.format}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {new Date(snapshot.generatedAt).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {snapshot.schedule?.name ?? 'Execução manual'}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <a
+                            href={`${apiBaseUrl}/reports/snapshots/${snapshot.id}/download`}
+                            className="text-xs font-semibold text-primary hover:underline"
+                          >
+                            Baixar
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
-
-          <AgentPerformanceTable agents={metrics?.agents ?? []} loading={metricsLoading} />
-
-          <QueuePerformanceTable queues={metrics?.queues ?? []} loading={metricsLoading} />
         </div>
       </div>
     </div>

@@ -62,7 +62,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-3">
+        <div className="absolute left-full top-0 z-50 ml-3">
           <NotificationPanel onClose={() => setOpen(false)} />
         </div>
       )}
