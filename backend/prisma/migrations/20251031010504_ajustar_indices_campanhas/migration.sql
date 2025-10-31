@@ -53,7 +53,7 @@ CREATE TABLE "message_insights" (
 -- CreateTable
 CREATE TABLE "message_suggestions" (
     "id" TEXT NOT NULL,
-    "" TEXT NOT NULL,
+    "messageId_text" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
     "suggestion" TEXT NOT NULL,
     "confidence" DOUBLE PRECISION,
