@@ -26,10 +26,10 @@ CREATE TYPE "SmsProvider" AS ENUM ('TWILIO');
 ALTER TYPE "MessageStatus" ADD VALUE 'FAILED';
 
 -- DropIndex
-DROP INDEX "scheduled_message_logs_messageId_idx";
+DROP INDEX IF EXISTS "scheduled_message_logs_messageId_idx";
 
 -- DropIndex
-DROP INDEX "scheduled_messages_ticketId_idx";
+DROP INDEX IF EXISTS "scheduled_messages_ticketId_idx";
 
 -- AlterTable
 ALTER TABLE "messages" ADD COLUMN     "channel" "MessageChannel" NOT NULL DEFAULT 'WHATSAPP',
@@ -53,7 +53,7 @@ CREATE TABLE "message_insights" (
 -- CreateTable
 CREATE TABLE "message_suggestions" (
     "id" TEXT NOT NULL,
-    "messageId" TEXT NOT NULL,
+    "" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
     "suggestion" TEXT NOT NULL,
     "confidence" DOUBLE PRECISION,
@@ -129,7 +129,7 @@ CREATE TABLE "message_campaign_recipients" (
     "campaignId" TEXT NOT NULL,
     "contactId" TEXT NOT NULL,
     "ticketId" TEXT,
-    "messageId" TEXT,
+    "" TEXT,
     "status" "MessageCampaignRecipientStatus" NOT NULL DEFAULT 'PENDING',
     "error" TEXT,
     "scheduledAt" TIMESTAMP(3),
@@ -195,7 +195,7 @@ CREATE TABLE "integration_logs" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "message_insights_messageId_key" ON "message_insights"("messageId");
+CREATE UNIQUE INDEX "message_insights__key" ON "message_insights"("");
 
 -- CreateIndex
 CREATE INDEX "message_suggestions_ticketId_idx" ON "message_suggestions"("ticketId");
