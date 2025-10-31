@@ -2,13 +2,15 @@ import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import fs from 'fs';
 import path from 'path';
 import qrcode from 'qrcode';
-import { AutomationTrigger } from '@prisma/client';
+import { AutomationTrigger, MessageChannel, MessageStatus } from '@prisma/client';
 import prisma from '../config/database';
 import { io } from '../server';
 import { applyAutomaticTagsToTicket } from './tagAutomation';
 import { notifyIncomingTicketMessage, notifyNewTicketCreated } from './notificationTriggers';
 import { processIncomingMessageForChatbot } from './chatbotEngine';
 import { runAutomations } from './automationService';
+import { processMessageWithAi } from './aiOrchestrator';
+import { emitMessageEvent, emitTicketCreatedEvent } from './integrationService';
 
 interface WhatsAppClient {
   id: string;
@@ -17,6 +19,7 @@ interface WhatsAppClient {
 }
 
 const clients: Map<string, WhatsAppClient> = new Map();
+const AI_CHATBOT_MODE = (process.env.AI_CHATBOT_MODE || 'assist').toLowerCase();
 
 const uploadsDir = path.resolve(__dirname, '../../uploads');
 
@@ -202,6 +205,9 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
 
       io.emit('ticket:new', ticket);
       await notifyNewTicketCreated(ticket);
+      emitTicketCreatedEvent(ticket.id).catch((error) => {
+        console.warn('[Integration] Failed to emit ticket.created event', error);
+      });
     } else {
       ticket =
         (await prisma.ticket.findUnique({
@@ -235,7 +241,8 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
             : msg.type.toUpperCase(),
         mediaUrl,
         ticketId: ticket.id,
-        status: 'RECEIVED'
+        channel: MessageChannel.WHATSAPP,
+        status: MessageStatus.RECEIVED
       }
     });
 
@@ -262,7 +269,68 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
 
     io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
     await notifyIncomingTicketMessage(ticket, prismaMessage.body ?? '', { actorId: null });
+    emitMessageEvent(prismaMessage.id, 'INBOUND').catch((error) => {
+      console.warn('[Integration] Failed to emit message.received event', error);
+    });
     await processIncomingMessageForChatbot({ ticketId: ticket.id, messageId: prismaMessage.id });
+
+    const aiOutcome = await processMessageWithAi({
+      ticketId: ticket.id,
+      messageId: prismaMessage.id,
+      actor: 'contact',
+      skipPrivate: true
+    });
+
+    if (aiOutcome.autoReply) {
+      if (AI_CHATBOT_MODE === 'auto' && aiOutcome.autoReply.shouldReply) {
+        try {
+          const contact = await prisma.contact.findUnique({
+            where: { id: ticket.contactId },
+            select: { phoneNumber: true }
+          });
+
+          if (!contact?.phoneNumber) {
+            console.warn('[AI] Telefone do contato indisponivel, resposta automatica nao enviada');
+          } else {
+            await sendWhatsAppMessage(ticket.whatsappId, contact.phoneNumber, aiOutcome.autoReply.message);
+
+            const botMessage = await prisma.message.create({
+              data: {
+                ticketId: ticket.id,
+                body: aiOutcome.autoReply.message,
+                type: 'TEXT',
+                status: MessageStatus.SENT,
+                channel: MessageChannel.WHATSAPP,
+                isPrivate: false
+              }
+            });
+
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: { lastMessageAt: new Date() }
+            });
+
+            await prisma.contact.update({
+              where: { id: ticket.contactId },
+              data: { lastInteractionAt: new Date() }
+            });
+
+            io.emit('message:new', { ...botMessage, ticketId: ticket.id });
+            emitMessageEvent(botMessage.id, 'OUTBOUND').catch((error) => {
+              console.warn('[Integration] Failed to emit message.sent event (auto reply)', error);
+            });
+          }
+        } catch (error) {
+          console.error('[AI] Falha ao enviar resposta automática', error);
+        }
+      } else if (aiOutcome.autoReply.shouldReply) {
+        io.emit('ai:chatbotSuggestion', {
+          ticketId: ticket.id,
+          messageId: prismaMessage.id,
+          reply: aiOutcome.autoReply
+        });
+      }
+    }
   } catch (error) {
     console.error('Erro ao processar mensagem:', error);
   }

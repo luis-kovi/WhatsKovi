@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useTicketStore } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
@@ -113,7 +113,11 @@ export default function TicketList() {
   const fetchTags = useMetadataStore((state) => state.fetchTags);
 
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
-  const [showTagFilter, setShowTagFilter] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [activeFilterCategory, setActiveFilterCategory] = useState<'tags' | 'status' | 'queues'>('tags');
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [manualPhone, setManualPhone] = useState('');
   const [manualName, setManualName] = useState('');
@@ -127,10 +131,38 @@ export default function TicketList() {
 
   const activeTagIds = useMemo(() => filters.tagIds || [], [filters.tagIds]);
 
+  const filterCount = activeTagIds.length + (filters.status ? 1 : 0) + (filters.queueId ? 1 : 0);
+  const filterButtonActive = filterCount > 0;
+  const sortOption =
+    filters.sort && filters.sort !== 'recent'
+      ? SORT_OPTIONS.find((option) => option.value === filters.sort) ?? null
+      : null;
+  const hasActiveFilters =
+    Boolean(searchTerm.trim()) || filterCount > 0 || Boolean(filters.sort && filters.sort !== 'recent');
+
+
   useEffect(() => {
     fetchQueues();
     fetchTags();
   }, [fetchQueues, fetchTags]);
+  useEffect(() => {
+    if (!showFilterMenu && !showSortMenu) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (showFilterMenu && filterMenuRef.current && !filterMenuRef.current.contains(target)) {
+        setShowFilterMenu(false);
+      }
+      if (showSortMenu && sortMenuRef.current && !sortMenuRef.current.contains(target)) {
+        setShowSortMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilterMenu, showSortMenu]);
 
   const handleSearchSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -149,18 +181,21 @@ export default function TicketList() {
     await setFilter('tagIds', nextTags);
   };
 
-  const handleQueueChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value || undefined;
-    await setFilter('queueId', value);
+  const handleQueueFilterSelect = async (queueId?: string) => {
+    await setFilter('queueId', queueId || undefined);
   };
 
-  const handleSortChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value || undefined;
-    await setFilter('sort', value);
+  const handleSortSelect = async (value: string) => {
+    const nextValue = filters.sort === value ? undefined : value;
+    await setFilter('sort', nextValue);
+    setShowSortMenu(false);
   };
 
   const handleResetFilters = async () => {
     setSearchTerm('');
+    setShowFilterMenu(false);
+    setShowSortMenu(false);
+    setActiveFilterCategory('tags');
     await clearFilters();
   };
 
@@ -278,17 +313,12 @@ export default function TicketList() {
     <>
       <div className="flex w-[420px] flex-col border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Atendimentos</h2>
-              <p className="text-xs text-gray-500">
-                Controle seus tickets manualmente ou pelas mensagens recebidas.
-              </p>
-            </div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-bold text-gray-800">Atendimentos</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={openCreateModal}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 whitespace-nowrap"
               >
                 <Plus size={16} />
                 Criar ticket
@@ -304,8 +334,8 @@ export default function TicketList() {
           </div>
 
           <form onSubmit={handleSearchSubmit} className="mb-3">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1">
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
@@ -315,125 +345,218 @@ export default function TicketList() {
                   className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
-              <div className="relative">
+
+              <div className="relative" ref={filterMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setShowTagFilter((prev) => !prev)}
+                  onClick={() => {
+                    setShowFilterMenu((previous) => !previous);
+                    setShowSortMenu(false);
+                  }}
                   className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                    activeTagIds.length > 0
-                      ? 'border-primary bg-primary text-white'
+                    filterButtonActive
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
                   <Filter size={16} />
-                  Tags
-                  {activeTagIds.length > 0 && (
-                    <span className="rounded-full bg-white px-1.5 text-[10px] font-bold text-primary">
-                      {activeTagIds.length}
+                  Filtro
+                  {filterCount > 0 && (
+                    <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-bold text-primary">
+                      {filterCount}
                     </span>
                   )}
                 </button>
 
-                {showTagFilter && (
-                  <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                        Filtrar por tags
-                      </span>
-                      <button
-                        onClick={() => {
-                          setShowTagFilter(false);
-                          setFilter('tagIds', []);
-                        }}
-                        className="text-[10px] font-semibold uppercase text-primary"
-                      >
-                        Limpar
-                      </button>
-                    </div>
-                    <div className="max-h-56 space-y-2 overflow-y-auto">
-                      {tags.length === 0 ? (
-                        <p className="text-xs text-gray-500">Nenhuma tag cadastrada.</p>
-                      ) : (
-                        tags.map((tag) => {
-                          const checked = activeTagIds.includes(tag.id);
-                          return (
-                            <label
-                              key={tag.id}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-xs hover:border-primary/30"
+                {showFilterMenu && (
+                  <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-gray-200 bg-white shadow-xl">
+                    <div className="flex">
+                      <div className="flex w-28 flex-col gap-1 border-r border-gray-100 p-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        <button
+                          type="button"
+                          onClick={() => setActiveFilterCategory('tags')}
+                          className={`rounded-lg px-2 py-1 text-left transition ${
+                            activeFilterCategory === 'tags' ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                          }`}
+                        >
+                          Tags
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveFilterCategory('status')}
+                          className={`rounded-lg px-2 py-1 text-left transition ${
+                            activeFilterCategory === 'status' ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                          }`}
+                        >
+                          Status
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveFilterCategory('queues')}
+                          className={`rounded-lg px-2 py-1 text-left transition ${
+                            activeFilterCategory === 'queues' ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100'
+                          }`}
+                        >
+                          Filas
+                        </button>
+                      </div>
+                      <div className="flex-1 p-3">
+                        {activeFilterCategory === 'tags' && (
+                          <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+                            {tags.length === 0 ? (
+                              <p className="text-xs text-gray-500">Nenhuma tag cadastrada.</p>
+                            ) : (
+                              tags.map((tag) => {
+                                const checked = activeTagIds.includes(tag.id);
+                                return (
+                                  <label
+                                    key={tag.id}
+                                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-xs hover:border-primary/30"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleTag(tag.id)}
+                                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                    />
+                                    <span className="flex items-center gap-2">
+                                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                                      {tag.name}
+                                    </span>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+
+                        {activeFilterCategory === 'status' && (
+                          <div className="space-y-2">
+                            {STATUS_OPTIONS.map((option) => {
+                              const active = filters.status === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => handleStatusClick(option.value)}
+                                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition ${
+                                    active ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {option.label}
+                                  {active && <span className="text-[10px] font-semibold uppercase text-primary">Ativo</span>}
+                                </button>
+                              );
+                            })}
+                            {filters.status && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusClick(filters.status!)}
+                                className="w-full rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-500 transition hover:bg-gray-100"
+                              >
+                                Limpar status
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {activeFilterCategory === 'queues' && (
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => handleQueueFilterSelect()}
+                              className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition ${
+                                !filters.queueId ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                              }`}
                             >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleTag(tag.id)}
-                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                              />
-                              <span className="flex items-center gap-2">
-                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
-                                {tag.name}
-                              </span>
-                            </label>
-                          );
-                        })
-                      )}
+                              Todas as filas
+                            </button>
+                            {queues.length === 0 ? (
+                              <p className="text-xs text-gray-500">Nenhuma fila cadastrada.</p>
+                            ) : (
+                              queues.map((queue) => {
+                                const active = filters.queueId === queue.id;
+                                return (
+                                  <button
+                                    key={queue.id}
+                                    type="button"
+                                    onClick={() => handleQueueFilterSelect(queue.id)}
+                                    className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition ${
+                                      active ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: queue.color }} />
+                                      {queue.name}
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
-          </form>
 
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {STATUS_OPTIONS.map((option) => {
-              const isActive = filters.status === option.value;
-              return (
+              <div className="relative" ref={sortMenuRef}>
                 <button
-                  key={option.value}
-                  onClick={() => handleStatusClick(option.value)}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                    isActive
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  type="button"
+                  onClick={() => {
+                    setShowSortMenu((previous) => !previous);
+                    setShowFilterMenu(false);
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                    sortOption ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {option.label}
+                  Classificacao
                 </button>
-              );
-            })}
-          </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              onChange={handleQueueChange}
-              value={filters.queueId || ''}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">Todas as filas</option>
-              {queues.map((queue) => (
-                <option key={queue.id} value={queue.id}>
-                  {queue.name}
-                </option>
-              ))}
-            </select>
+                {showSortMenu && (
+                  <div className="absolute right-0 z-20 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
+                    {SORT_OPTIONS.map((option) => {
+                      const active = filters.sort === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleSortSelect(option.value)}
+                          className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs transition ${
+                            active ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          {option.label}
+                          {active && <span className="text-[10px] font-semibold uppercase text-primary">Ativo</span>}
+                        </button>
+                      );
+                    })}
+                    {filters.sort && (
+                      <button
+                        type="button"
+                        onClick={() => handleSortSelect(filters.sort!)}
+                        className="mt-1 w-full rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-500 transition hover:bg-gray-100"
+                      >
+                        Limpar classificacao
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
-            <select
-              onChange={handleSortChange}
-              value={filters.sort || 'recent'}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={() => handleResetFilters()}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
-            >
-              Resetar
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                disabled={!hasActiveFilters}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X size={14} />
+                Resetar
+              </button>
+            </div>
+          </form>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -653,4 +776,20 @@ export default function TicketList() {
     </>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

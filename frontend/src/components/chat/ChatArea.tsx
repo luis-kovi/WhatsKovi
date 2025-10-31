@@ -15,12 +15,14 @@ import {
   StickyNote,
   Mic,
   ChevronDown,
+  Plus,
   RotateCcw,
   Download,
   Loader2,
+  Sparkles,
   X
 } from 'lucide-react';
-import { useTicketStore, TicketMessage } from '@/store/ticketStore';
+import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useMessages } from '@/hooks/useMessages';
 import { useAvatar } from '@/hooks/useAvatar';
@@ -29,6 +31,7 @@ import { MessageItem } from '@/components/chat/MessageItem';
 import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
+import { fetchMultichannelCapabilities, MultichannelCapabilities } from '@/services/multichannel';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 
@@ -38,6 +41,25 @@ const PRIORITY_OPTIONS = [
   { value: 'HIGH', label: 'Alta' },
   { value: 'URGENT', label: 'Urgente' }
 ];
+
+const SENTIMENT_LABELS: Record<'POSITIVE' | 'NEUTRAL' | 'NEGATIVE', string> = {
+  POSITIVE: 'Positivas',
+  NEUTRAL: 'Neutras',
+  NEGATIVE: 'Negativas'
+};
+
+const SENTIMENT_STYLES: Record<'POSITIVE' | 'NEUTRAL' | 'NEGATIVE', string> = {
+  POSITIVE: 'bg-emerald-100 text-emerald-700',
+  NEUTRAL: 'bg-slate-200 text-slate-700',
+  NEGATIVE: 'bg-rose-100 text-rose-700'
+};
+
+type ChannelOption = {
+  value: MessageChannel;
+  label: string;
+  disabled: boolean;
+  reason?: string;
+};
 
 type MessageEditModalProps = {
   message: TicketMessage;
@@ -202,18 +224,28 @@ export default function ChatArea() {
     selectedTicket,
     acceptTicket,
     closeTicket,
-    reopenTicket,
     updateTicketDetails,
     addTicketTags,
-    removeTicketTag
+    removeTicketTag,
+    createManualTicket,
+    aiSuggestionsByMessage,
+    aiChatbotDrafts,
+    aiInsightsByTicket,
+    regenerateSuggestions,
+    previewChatbotReply
   } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
     acceptTicket: state.acceptTicket,
     closeTicket: state.closeTicket,
-    reopenTicket: state.reopenTicket,
     updateTicketDetails: state.updateTicketDetails,
     addTicketTags: state.addTicketTags,
-    removeTicketTag: state.removeTicketTag
+    removeTicketTag: state.removeTicketTag,
+    createManualTicket: state.createManualTicket,
+    aiSuggestionsByMessage: state.aiSuggestionsByMessage,
+    aiChatbotDrafts: state.aiChatbotDrafts,
+    aiInsightsByTicket: state.aiInsightsByTicket,
+    regenerateSuggestions: state.regenerateSuggestions,
+    previewChatbotReply: state.previewChatbotReply
   }));
 
   const { tags, queues, reactionPalette, fetchTags, fetchQueues } = useMetadataStore((state) => ({
@@ -247,25 +279,146 @@ export default function ChatArea() {
     setQuotedMessage
   } = useMessages({ ticketId: selectedTicket?.id });
 
+  const visibleMessages = useMemo(() => messages.filter((message) => !message.isPrivate), [messages]);
+
+
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [messageChannel, setMessageChannel] = useState<MessageChannel>('WHATSAPP');
   const [isQuickReplyModalOpen, setQuickReplyModalOpen] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [multichannelCapabilities, setMultichannelCapabilities] = useState<MultichannelCapabilities | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [isRegeneratingSuggestions, setIsRegeneratingSuggestions] = useState(false);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [creatingFollowUpTicket, setCreatingFollowUpTicket] = useState(false);
   const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<TicketMessage | null>(null);
   const [editingBody, setEditingBody] = useState('');
   const [editingPrivate, setEditingPrivate] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const contactEmail = selectedTicket?.contact.email?.trim() ?? '';
+
+  const channelOptions = useMemo<ChannelOption[]>(() => {
+    if (isPrivate) {
+      return [];
+    }
+
+    const options: ChannelOption[] = [{ value: 'WHATSAPP', label: 'WhatsApp', disabled: false }];
+
+    if (!multichannelCapabilities) {
+      return options;
+    }
+
+    const emailStatus = multichannelCapabilities.email;
+    let emailReason: string | undefined;
+    if (!emailStatus.enabled) {
+      emailReason = 'Canal de e-mail desativado nas configuracoes.';
+    } else if (!emailStatus.configured) {
+      emailReason = 'Configure o SMTP em Configuracoes > Integracoes.';
+    } else if (!contactEmail) {
+      emailReason = 'Contato sem e-mail cadastrado.';
+    }
+
+    options.push({
+      value: 'EMAIL',
+      label: 'E-mail',
+      disabled: Boolean(emailReason),
+      reason: emailReason
+    });
+
+    const smsStatus = multichannelCapabilities.sms;
+    let smsReason: string | undefined;
+    if (!smsStatus.enabled) {
+      smsReason = 'Canal de SMS desativado nas configuracoes.';
+    } else if (!smsStatus.configured) {
+      smsReason = 'Configure o provedor de SMS em Configuracoes > Integracoes.';
+    }
+
+    options.push({
+      value: 'SMS',
+      label: 'SMS',
+      disabled: Boolean(smsReason),
+      reason: smsReason
+    });
+
+    return options;
+  }, [contactEmail, isPrivate, multichannelCapabilities]);
+
+  useEffect(() => {
+    if (isPrivate) {
+      setMessageChannel('WHATSAPP');
+    }
+  }, [isPrivate]);
+
+  useEffect(() => {
+    if (isPrivate) return;
+    const currentOption = channelOptions.find((option) => option.value === messageChannel);
+    if (!currentOption || currentOption.disabled) {
+      setMessageChannel('WHATSAPP');
+    }
+  }, [channelOptions, isPrivate, messageChannel]);
   const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  const ticketInsights = useMemo(
+    () => (selectedTicket ? aiInsightsByTicket[selectedTicket.id] : undefined),
+    [aiInsightsByTicket, selectedTicket]
+  );
+
+  const latestCustomerMessage = useMemo(() => {
+    if (!selectedTicket || visibleMessages.length === 0) {
+      return null;
+    }
+    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
+      const candidate = visibleMessages[index];
+      if (!candidate.userId && !candidate.isPrivate && candidate.body && candidate.body.trim().length > 0) {
+        return candidate;
+      }
+    }
+    return null;
+  }, [visibleMessages, selectedTicket]);
+
+  const handleSelectChannelOption = useCallback(
+    (channel: MessageChannel) => {
+      if (isPrivate) return;
+      const option = channelOptions.find((item) => item.value === channel);
+      if (!option) return;
+      if (option.disabled) {
+        if (option.reason) {
+          toast.error(option.reason);
+        }
+        return;
+      }
+      setMessageChannel(channel);
+    },
+    [channelOptions, isPrivate]
+  );
+
+  const aiSuggestions = useMemo(
+    () =>
+      latestCustomerMessage ? aiSuggestionsByMessage[latestCustomerMessage.id] ?? [] : [],
+    [aiSuggestionsByMessage, latestCustomerMessage]
+  );
+
+  const chatbotDraft = useMemo(
+    () => (selectedTicket ? aiChatbotDrafts[selectedTicket.id] : undefined),
+    [aiChatbotDrafts, selectedTicket]
+  );
+  const hasAiSuggestions = aiSuggestions.length > 0;
+  const customerMessagePreview = latestCustomerMessage?.body
+    ? latestCustomerMessage.body.length > 160
+      ? `${latestCustomerMessage.body.slice(0, 160)}...`
+      : latestCustomerMessage.body
+    : '';
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -319,9 +472,28 @@ export default function ChatArea() {
   }, [selectedTicket, loadQuickReplies]);
 
   useEffect(() => {
-    if (messages.length === 0) return;
+    let mounted = true;
+
+    fetchMultichannelCapabilities()
+      .then((data) => {
+        if (mounted) {
+          setMultichannelCapabilities(data);
+        }
+      })
+      .catch((error) => {
+        console.error('Erro ao carregar configuracoes de multicanal:', error);
+        toast.error('Nao foi possivel carregar os canais adicionais.');
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (visibleMessages.length === 0) return;
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+  }, [visibleMessages.length, scrollToBottom]);
 
   useEffect(() => {
     if (!showEmojiPicker) return;
@@ -461,6 +633,11 @@ export default function ChatArea() {
   );
 
   const handleToggleRecording = async () => {
+    if (!isPrivate && messageChannel !== 'WHATSAPP') {
+      toast.error('Gravacao disponivel apenas para WhatsApp.');
+      return;
+    }
+
     if (isRecording) {
       stopRecording(false);
       return;
@@ -523,6 +700,7 @@ export default function ChatArea() {
             isPrivate,
             quotedMsgId: quotedMessage?.id ?? null,
             type: 'AUDIO',
+            channel: 'WHATSAPP',
             onUploadProgress: (progress) => setUploadProgress(progress)
           });
           toast.success(isPrivate ? 'Nota interna por audio criada' : 'Audio enviado');
@@ -556,11 +734,12 @@ export default function ChatArea() {
 
     setIsSending(true);
     try {
-      await sendMessageAction({
-        body: trimmed,
-        isPrivate,
-        quotedMsgId: quotedMessage?.id ?? null
-      });
+        await sendMessageAction({
+          body: trimmed,
+          isPrivate,
+          quotedMsgId: quotedMessage?.id ?? null,
+          channel: !isPrivate ? messageChannel : undefined
+        });
       setNewMessage('');
       setShowEmojiPicker(false);
       setQuickReplyModalOpen(false);
@@ -579,6 +758,10 @@ export default function ChatArea() {
 
   const handleFileButtonClick = () => {
     if (!selectedTicket) return;
+    if (!isPrivate && messageChannel !== 'WHATSAPP') {
+      toast.error('Envio de arquivos disponivel apenas para WhatsApp.');
+      return;
+    }
     setShowEmojiPicker(false);
     setQuickReplyModalOpen(false);
     fileInputRef.current?.click();
@@ -606,6 +789,10 @@ export default function ChatArea() {
     if (!selectedTicket) return;
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!isPrivate && messageChannel !== 'WHATSAPP') {
+      toast.error('Envio de arquivos disponivel apenas para WhatsApp.');
+      return;
+    }
 
     setUploadingFile(true);
     setUploadProgress(0);
@@ -643,10 +830,33 @@ export default function ChatArea() {
     toast.success('Atendimento finalizado');
   };
 
-  const handleReopenTicket = async () => {
-    if (!selectedTicket) return;
-    await reopenTicket(selectedTicket.id);
-    toast.success('Atendimento reaberto');
+  const handleCreateFollowUpTicket = async () => {
+    if (!selectedTicket || creatingFollowUpTicket) return;
+
+    const phone = selectedTicket.contact.phoneNumber;
+    const confirmed = window.confirm(
+      `Confirma abertura de um novo ticket de atendimento para o telefone ${phone}?`
+    );
+    if (!confirmed) return;
+
+    setCreatingFollowUpTicket(true);
+    try {
+      const tagIds = selectedTicket.tags.map((relation) => relation.tag.id);
+      await createManualTicket({
+        phoneNumber: selectedTicket.contact.phoneNumber,
+        name: selectedTicket.contact.name,
+        queueId: selectedTicket.queue?.id ?? undefined,
+        priority: selectedTicket.priority,
+        tagIds: tagIds.length > 0 ? tagIds : undefined,
+        carPlate: selectedTicket.carPlate ?? undefined
+      });
+      toast.success('Novo ticket criado para este contato.');
+    } catch (error) {
+      console.error('Erro ao criar novo ticket para contato:', error);
+      toast.error('Nao foi possivel criar o novo ticket.');
+    } finally {
+      setCreatingFollowUpTicket(false);
+    }
   };
 
   const handlePriorityChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -687,6 +897,59 @@ export default function ChatArea() {
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });
+  };
+
+  const handleApplySuggestion = (suggestion: string) => {
+    setNewMessage(suggestion);
+    setIsPrivate(false);
+    setQuickReplyModalOpen(false);
+    setShowEmojiPicker(false);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  };
+
+  const handleRegenerateAiSuggestions = async () => {
+    if (!selectedTicket || !latestCustomerMessage) {
+      toast.error('Nenhuma mensagem do cliente disponível para sugestão.');
+      return;
+    }
+
+    setIsRegeneratingSuggestions(true);
+    try {
+      await regenerateSuggestions(latestCustomerMessage.id, selectedTicket.id);
+      toast.success('Sugestões atualizadas com IA.');
+    } catch (error) {
+      console.error('Erro ao regenerar sugestões de IA:', error);
+      toast.error('Não foi possível atualizar as sugestões agora.');
+    } finally {
+      setIsRegeneratingSuggestions(false);
+    }
+  };
+
+  const handleGenerateChatbotReply = async () => {
+    if (!selectedTicket || !latestCustomerMessage?.body) {
+      toast.error('Nenhuma mensagem válida para gerar resposta automática.');
+      return;
+    }
+
+    setIsGeneratingDraft(true);
+    try {
+      const result = await previewChatbotReply(selectedTicket.id, latestCustomerMessage.body);
+      if (result) {
+        toast.success('Sugestão de resposta gerada com IA.');
+      }
+    } catch (error) {
+      console.error('Erro ao gerar resposta com IA:', error);
+      toast.error('Não foi possível gerar uma resposta automática.');
+    } finally {
+      setIsGeneratingDraft(false);
+    }
+  };
+
+  const handleUseChatbotDraft = () => {
+    if (!chatbotDraft) return;
+    handleApplySuggestion(chatbotDraft.message);
   };
 
   const handleToggleMessageMenu = (messageId: string) => {
@@ -828,9 +1091,9 @@ export default function ChatArea() {
 
   return (
     <div className='flex flex-1 flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-950'>
-      <div className='flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900'>
-        <div className='flex items-center gap-3'>
-          <div className='relative h-12 w-12 overflow-hidden rounded-full'>
+      <div className='flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900'>
+        <div className='flex items-center gap-2'>
+          <div className='relative h-10 w-10 overflow-hidden rounded-full'>
             {contactAvatar.hasImage && contactAvatar.src ? (
               <Image
                 src={contactAvatar.src}
@@ -851,7 +1114,7 @@ export default function ChatArea() {
           <div>
             <p className='text-sm font-semibold text-gray-800'>{selectedTicket.contact.name}</p>
             <p className='text-xs text-gray-500'>{selectedTicket.contact.phoneNumber}</p>
-            <div className='mt-2 flex items-center gap-2'>
+            <div className='mt-1 flex items-center gap-2'>
               <select
                 value={selectedTicket.priority}
                 onChange={handlePriorityChange}
@@ -901,6 +1164,18 @@ export default function ChatArea() {
 
         <div className='flex items-center gap-2'>
           <button
+            onClick={() => setIsPrivate((prev) => !prev)}
+            className={`inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+              isPrivate
+                ? 'border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-100'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <StickyNote size={14} />
+            Nota interna
+          </button>
+
+          <button
             onClick={handleExportConversation}
             className='inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100'
           >
@@ -928,11 +1203,12 @@ export default function ChatArea() {
 
           {selectedTicket.status === 'CLOSED' && (
             <button
-              onClick={handleReopenTicket}
-              className='inline-flex items-center gap-1 rounded-lg border border-primary bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10'
+              onClick={handleCreateFollowUpTicket}
+              disabled={creatingFollowUpTicket}
+              className='inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60'
             >
-              <RotateCcw size={14} />
-              Reabrir
+              {creatingFollowUpTicket ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus size={14} />}
+              Criar novo ticket
             </button>
           )}
 
@@ -940,17 +1216,75 @@ export default function ChatArea() {
       </div>
 
       <div className='flex-1 space-y-4 overflow-y-auto bg-gray-100 px-5 py-4 transition-colors duration-300 dark:bg-slate-900'>
+        {ticketInsights && (
+          <div className='rounded-2xl border border-primary/20 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:bg-slate-800/60'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
+              <div>
+                <p className='text-xs font-semibold uppercase tracking-wide text-primary'>Resumo inteligente</p>
+                {ticketInsights.classification ? (
+                  <p className='text-sm text-gray-700 dark:text-gray-200'>
+                    Classificação automática:{' '}
+                    <span className='font-semibold capitalize text-primary'>
+                      {ticketInsights.classification.category.replace(/_/g, ' ')}
+                    </span>
+                    {typeof ticketInsights.classification.confidence === 'number'
+                      ? ` (${Math.round(ticketInsights.classification.confidence * 100)}% confiança)`
+                      : ''}
+                  </p>
+                ) : (
+                  <p className='text-sm text-gray-500 dark:text-gray-400'>
+                    Ainda sem classificação automática para este atendimento.
+                  </p>
+                )}
+              </div>
+              {ticketInsights.classification?.keywords?.length ? (
+                <div className='flex flex-wrap gap-2 text-[11px] font-semibold text-primary'>
+                  {ticketInsights.classification.keywords.slice(0, 4).map((keyword) => (
+                    <span key={keyword} className='rounded-full bg-primary/10 px-2 py-1'>
+                      #{keyword}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {ticketInsights.sentiment && (
+              <div className='mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300'>
+                {(['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as const).map((label) => {
+                  const count = ticketInsights.sentiment?.totals?.[label] ?? 0;
+                  return (
+                    <span
+                      key={label}
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${SENTIMENT_STYLES[label]}`}
+                    >
+                      {SENTIMENT_LABELS[label]}: {count}
+                    </span>
+                  );
+                })}
+                {ticketInsights.sentiment.last && (
+                  <span className='ml-auto text-xs font-normal text-gray-500 dark:text-gray-400'>
+                    Última análise:{' '}
+                    {ticketInsights.sentiment.last.summary
+                      ? `"${ticketInsights.sentiment.last.summary}"`
+                      : SENTIMENT_LABELS[
+                          ticketInsights.sentiment.last.sentiment as 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+                        ]}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {!messagesLoaded ? (
           <div className='flex h-full items-center justify-center text-sm text-gray-500'>
             <Loader2 className='mr-2 h-4 w-4 animate-spin' />
             Carregando conversa...
           </div>
-        ) : messages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className='flex h-full items-center justify-center text-sm text-gray-500'>
             Nenhuma mensagem registrada ainda.
           </div>
         ) : (
-          messages.map((message) => {
+          visibleMessages.map((message) => {
             const isFromAgent = Boolean(message.userId);
             const author = message.user?.name ?? selectedTicket.contact.name;
             const isOwner = Boolean(message.userId && message.userId === currentUserId);
@@ -989,46 +1323,34 @@ export default function ChatArea() {
       </div>
 
       <div className='border-t border-gray-200 bg-white px-5 py-4'>
-        <div className='mb-3 flex flex-wrap items-center gap-2'>
+        <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
           <div className='flex flex-wrap items-center gap-2'>
             {selectedTicket.tags.map((relation) => (
               <span
                 key={relation.id}
-                className='inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide'
-                style={{ backgroundColor: `${relation.tag.color}22`, color: relation.tag.color }}
+                className='inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide'
+                style={{ backgroundColor: `${relation.tag.color}1A`, color: relation.tag.color }}
               >
                 <TagIcon size={12} />
                 {relation.tag.name}
               </span>
             ))}
-            <button
-              onClick={() => setShowTagManager((prev) => !prev)}
-              className='inline-flex items-center gap-1 rounded-full border border-dashed border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10'
-            >
-              <TagIcon size={12} />
-              Gerenciar tags
-            </button>
           </div>
-
           <button
-            onClick={() => setIsPrivate((prev) => !prev)}
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-              isPrivate
-                ? 'bg-amber-100 text-amber-600'
-                : 'border border-gray-200 text-gray-500 hover:bg-gray-100'
-            }`}
+            onClick={() => setShowTagManager((prev) => !prev)}
+            className='inline-flex items-center gap-1 rounded-full border border-dashed border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10'
           >
-            <StickyNote size={12} />
-            Nota interna
+            <TagIcon size={12} />
+            Gerenciar tags
           </button>
         </div>
 
         {showTagManager && (
-          <div className='mb-3 rounded-xl border border-gray-200 bg-gray-50 p-3 shadow-inner'>
-            <p className='text-xs font-semibold uppercase text-gray-500'>Selecione tags para este atendimento</p>
+          <div className='mb-3 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2'>
+            <p className='text-[11px] font-semibold uppercase text-gray-500'>Selecione tags para este atendimento</p>
             <div className='mt-2 flex flex-wrap gap-2'>
               {tags.length === 0 ? (
-                <span className='text-xs text-gray-500'>Nenhuma tag cadastrada.</span>
+                <span className='text-[11px] text-gray-500'>Nenhuma tag cadastrada.</span>
               ) : (
                 tags.map((tag) => {
                   const active = activeTagIds.includes(tag.id);
@@ -1036,7 +1358,7 @@ export default function ChatArea() {
                     <button
                       key={tag.id}
                       onClick={() => handleToggleTag(tag.id)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
                         active ? 'bg-primary text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
                       }`}
                     >
@@ -1046,6 +1368,27 @@ export default function ChatArea() {
                 })
               )}
             </div>
+          </div>
+        )}
+        {!isPrivate && channelOptions.length > 1 && (
+          <div className='mb-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-gray-500'>
+            <span className='uppercase tracking-wide'>Enviar via</span>
+            {channelOptions.map((option) => (
+              <button
+                key={option.value}
+                type='button'
+                aria-disabled={option.disabled}
+                onClick={() => handleSelectChannelOption(option.value)}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                  messageChannel === option.value
+                    ? 'border-primary bg-primary text-white shadow-sm'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                } ${option.disabled ? 'cursor-not-allowed opacity-60 hover:bg-transparent' : ''}`}
+                title={option.disabled && option.reason ? option.reason : undefined}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         )}
         {quotedMessage && (
@@ -1111,6 +1454,86 @@ export default function ChatArea() {
                 style={{ width: `${Math.min(uploadProgress, 100)}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {selectedTicket && latestCustomerMessage && (
+          <div className='mb-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3 shadow-sm'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <div>
+                <p className='text-[11px] font-semibold uppercase tracking-wide text-violet-600'>Sugestões com IA</p>
+                {customerMessagePreview ? (
+                  <p className='text-[10px] text-violet-600/80'>
+                    Última mensagem analisada: “{customerMessagePreview}”
+                  </p>
+                ) : null}
+              </div>
+              <div className='flex items-center gap-2'>
+                <button
+                  type='button'
+                  onClick={handleRegenerateAiSuggestions}
+                  disabled={isRegeneratingSuggestions || !latestCustomerMessage.body}
+                  className='inline-flex items-center gap-1 rounded-lg border border-violet-300 px-3 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60'
+                >
+                  {isRegeneratingSuggestions ? (
+                    <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                  ) : (
+                    <RotateCcw size={14} />
+                  )}
+                  Atualizar
+                </button>
+                <button
+                  type='button'
+                  onClick={handleGenerateChatbotReply}
+                  disabled={isGeneratingDraft || !latestCustomerMessage.body}
+                  className='inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-400'
+                >
+                  {isGeneratingDraft ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Sparkles size={14} />}
+                  Gerar resposta
+                </button>
+              </div>
+            </div>
+
+            {hasAiSuggestions ? (
+              <div className='mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3'>
+                {aiSuggestions.map((suggestion, index) => (
+                  <button
+                    key={`${suggestion.text}-${index}`}
+                    type='button'
+                    onClick={() => handleApplySuggestion(suggestion.text)}
+                    className='group h-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-left text-sm text-gray-700 transition hover:border-violet-400 hover:shadow-sm'
+                  >
+                    <span className='text-[11px] font-semibold uppercase tracking-wide text-violet-500'>
+                      Sugestão #{index + 1}
+                    </span>
+                    <span className='mt-1 block text-sm leading-relaxed text-gray-700'>{suggestion.text}</span>
+                    {suggestion.reason && (
+                      <span className='mt-2 block text-[11px] text-gray-400'>Motivo: {suggestion.reason}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className='mt-2 text-[11px] text-violet-700'>
+                Nenhuma sugestão disponível no momento. Gere uma nova sugestão para acelerar a resposta.
+              </p>
+            )}
+
+            {chatbotDraft && chatbotDraft.shouldReply && (
+              <div className='mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <span className='font-semibold text-emerald-700'>Resposta sugerida pela IA</span>
+                  <button
+                    type='button'
+                    onClick={handleUseChatbotDraft}
+                    className='inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-emerald-600'
+                  >
+                    Usar resposta
+                  </button>
+                </div>
+                <p className='mt-2 text-sm leading-relaxed text-emerald-800'>{chatbotDraft.message}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1243,3 +1666,23 @@ export default function ChatArea() {
     </div>
 );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

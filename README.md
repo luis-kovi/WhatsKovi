@@ -86,6 +86,9 @@ npm run prisma:migrate
 # Popule o banco com dados iniciais
 npm run prisma:seed
 
+# Rode os testes automatizados (opcional, valida a camada de IA)
+npm run test
+
 # Inicie o servidor
 npm run dev
 ```
@@ -177,7 +180,26 @@ Após executar o seed, você pode fazer login com:
 Eventos Socket.IO relacionados:
 - `message:new` ao publicar uma mensagem.
 - `message:update` para edicoes e reacoes.
-- `message:delete` ao excluir mensagens.
+- `message:delete` ao excluir mensagens.`r`n`r`n## 🤖 IA e Machine Learning
+
+A camada de IA do WhatsKovi pode operar apenas com heurísticas locais ou integrada a um provedor compatível com OpenAI. As variáveis principais (todas exemplificadas em `backend/.env.example`) são:
+
+- `OPENAI_API_KEY` / `OPENAI_API_BASE_URL`: credenciais e endpoint do provedor.
+- `OPENAI_MODEL`: modelo padrão (`gpt-4o-mini`).
+- `AI_HISTORY_LIMIT` e `AI_SUGGESTION_LIMIT`: quantidade de mensagens analisadas e sugestões retornadas.
+- `AI_SENTIMENT_ENABLED`, `AI_SUGGESTIONS_ENABLED`, `AI_CLASSIFICATION_ENABLED`: liga/desliga cada módulo.
+- `AI_CHATBOT_MODE`: `assist` (só sugere), `auto` (envia automaticamente) ou `off` (desativa o bot).
+- `AI_FORECAST_HORIZON`: horizonte, em dias, para previsão de demanda.
+- `AI_DEBUG_LOGS`: defina `true` para registrar no console, a cada mensagem, sentimentos, classificações e número de sugestões geradas (útil para calibração).
+
+### Como calibrar e observar os logs
+
+1. Ajuste as variáveis no `backend/.env` conforme necessário (por exemplo `AI_CHATBOT_MODE=assist` para trabalhar em modo assistido).
+2. Ative `AI_DEBUG_LOGS=true` e reinicie o backend (`npm run dev`). Cada mensagem processada emitirá um log `[AI]` com sentimento, classificação, quantidade de sugestões e se houve rascunho de resposta.
+3. Envie mensagens de teste (via WhatsApp ou diretamente pela API) e compare o resultado exibido na interface (“Sugestões com IA”) com os logs. Ajuste limites ou modo do chatbot conforme o comportamento desejado.
+4. Volte `AI_DEBUG_LOGS=false` após a calibração para manter os logs limpos em produção.
+
+> Dica: execute `npm run test` dentro de `backend/` sempre que alterar prompts ou heurísticas. Os testes garantem que insights e sugestões continuem sendo gerados para mensagens de clientes.
 
 ## 📂 Estrutura do Projeto
 
@@ -254,3 +276,7 @@ Para suporte, entre em contato através do email: suporte@whatskovi.com
 ---
 
 Desenvolvido com ❤️ para gestão eficiente de atendimentos WhatsApp
+
+
+
+

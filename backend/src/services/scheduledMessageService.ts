@@ -1,5 +1,6 @@
 import Queue from 'bull';
 import {
+  MessageChannel,
   MessageStatus,
   MessageType,
   Prisma,
@@ -12,6 +13,7 @@ import prisma from '../config/database';
 import { sendWhatsAppMessage } from './whatsappService';
 import { applyAutomaticTagsToTicket } from './tagAutomation';
 import { io } from '../server';
+import { emitMessageEvent } from './integrationService';
 
 const connection = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const queueName = 'message:schedule';
@@ -30,7 +32,7 @@ const WEEKDAY_MAP: Record<WeekdayCode, number> = {
   SAT: 6
 };
 
-const messageInclude = {
+const messageInclude: Prisma.MessageInclude = {
   user: { select: { id: true, name: true, avatar: true } },
   quotedMessage: {
     select: {
@@ -47,7 +49,7 @@ const messageInclude = {
       user: { select: { id: true, name: true, avatar: true } }
     }
   }
-} as const;
+};
 
 const clampDayOfMonth = (value?: number | null) => {
   if (!value || Number.isNaN(value)) {
@@ -308,6 +310,9 @@ scheduledMessageQueue.process('send', async (job) => {
       throw new Error('Ticket sem contato ou conexao WhatsApp ativa.');
     }
 
+    const channel = schedule.isPrivate ? MessageChannel.INTERNAL : MessageChannel.WHATSAPP;
+    const initialStatus = schedule.isPrivate ? MessageStatus.SENT : MessageStatus.PENDING;
+
     const createdMessage = await prisma.message.create({
       data: {
         body: schedule.body,
@@ -316,7 +321,8 @@ scheduledMessageQueue.process('send', async (job) => {
         mediaUrl: schedule.mediaUrl,
         ticketId: schedule.ticketId,
         userId: schedule.userId,
-        status: MessageStatus.PENDING
+        status: initialStatus,
+        channel
       }
     });
 
@@ -335,25 +341,52 @@ scheduledMessageQueue.process('send', async (job) => {
       data: { lastInteractionAt: runAt }
     });
 
-    await sendWhatsAppMessage(
-      ticket.whatsappId,
-      ticket.contact.phoneNumber,
-      schedule.body,
-      schedule.mediaUrl ?? undefined
-    );
+    let finalMessage: Prisma.MessageGetPayload<{ include: typeof messageInclude }>;
 
-    const finalMessage = await prisma.message.update({
-      where: { id: createdMessage.id },
-      data: { status: MessageStatus.SENT },
-      include: messageInclude
-    });
+    if (!schedule.isPrivate) {
+      await sendWhatsAppMessage(
+        ticket.whatsappId,
+        ticket.contact.phoneNumber,
+        schedule.body,
+        schedule.mediaUrl ?? undefined
+      );
+
+      finalMessage = await prisma.message.update({
+        where: { id: createdMessage.id },
+        data: { status: MessageStatus.SENT },
+        include: messageInclude
+      });
+    } else {
+      const fetched = await prisma.message.findUnique({
+        where: { id: createdMessage.id },
+        include: messageInclude
+      });
+
+      if (!fetched) {
+        throw new Error('Mensagem agendada nao encontrada apos a criacao.');
+      }
+
+      finalMessage = fetched;
+    }
 
     if (!schedule.isPrivate) {
       await applyAutomaticTagsToTicket(schedule.ticketId, finalMessage.body ?? '');
     }
 
     io.emit('message:new', { ...finalMessage, ticketId: schedule.ticketId });
+    if (!schedule.isPrivate) {
+      emitMessageEvent(finalMessage.id, 'OUTBOUND').catch((error) => {
+        console.warn('[Integration] Failed to emit scheduled message event', error);
+      });
+    }
   } catch (error) {
+    if (messageId) {
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { status: MessageStatus.FAILED }
+      }).catch(() => undefined);
+    }
+
     logStatus = ScheduledMessageLogStatus.FAILED;
     errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao enviar mensagem.';
   }

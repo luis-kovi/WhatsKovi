@@ -46,6 +46,14 @@ enum MessageStatus {
   SENT
   RECEIVED
   READ
+  FAILED
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+  INTERNAL
 }
 
 enum ScheduledMessageRecurrence {
@@ -163,6 +171,12 @@ enum SurveyChannel {
   MANUAL
 }
 
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
 model User {
   id                String       @id @default(uuid())
   name              String
@@ -192,6 +206,7 @@ model User {
   reportSchedules   ReportSchedule[]
   reportSnapshots   ReportSnapshot[]
   scheduledMessages ScheduledMessage[]
+  integrationConfigUpdates IntegrationConfig[] @relation("IntegrationConfigUpdater")
   satisfactionSurveys SatisfactionSurvey[] @relation("SurveyAgent")
   createdCampaigns  MessageCampaign[]      @relation("MessageCampaignCreatedBy")
   updatedCampaigns  MessageCampaign[]      @relation("MessageCampaignUpdatedBy")
@@ -306,6 +321,8 @@ model Ticket {
   satisfactionSurvey SatisfactionSurvey?
   scheduledMessages ScheduledMessage[]
   messageCampaignRecipients MessageCampaignRecipient[]
+  aiClassification  TicketClassification?
+  aiSuggestions     MessageSuggestion[]
 
   @@map("tickets")
 }
@@ -346,6 +363,7 @@ model Message {
   id                String       @id @default(uuid())
   body              String
   type              MessageType  @default(TEXT)
+  channel           MessageChannel @default(WHATSAPP)
   status            MessageStatus @default(PENDING)
   mediaUrl          String?
   isPrivate         Boolean      @default(false)
@@ -353,6 +371,7 @@ model Message {
   createdAt         DateTime     @default(now())
   editedAt          DateTime?
   editedBy          String?
+  deliveryMetadata  Json?
   
   ticketId          String
   ticket            Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -365,6 +384,8 @@ model Message {
   reactions         MessageReaction[]
   scheduledLogs     ScheduledMessageLog[]
   campaignRecipients MessageCampaignRecipient[]
+  insight           MessageInsight?
+  suggestions       MessageSuggestion[]
 
   @@map("messages")
 }
@@ -381,6 +402,69 @@ model MessageReaction {
 
   @@unique([messageId, userId, emoji])
   @@map("message_reactions")
+}
+
+model MessageInsight {
+  id             String          @id @default(uuid())
+  messageId      String          @unique
+  sentiment      SentimentLabel
+  sentimentScore Float?
+  summary        String?
+  keywords       String[]        @default([])
+  metadata       Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  message        Message         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("message_insights")
+}
+
+model MessageSuggestion {
+  id          String   @id @default(uuid())
+  messageId   String
+  ticketId    String
+  suggestion  String
+  confidence  Float?
+  source      String   @default("AI")
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("message_suggestions")
+}
+
+model TicketClassification {
+  id          String   @id @default(uuid())
+  ticketId    String   @unique
+  category    String
+  confidence  Float?
+  rationale   String?
+  keywords    String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_classifications")
+}
+
+model DemandForecast {
+  id           String   @id @default(uuid())
+  generatedAt  DateTime @default(now())
+  periodStart  DateTime
+  periodEnd    DateTime
+  horizonDays  Int
+  expectedTickets Int
+  lowerBound   Int?
+  upperBound   Int?
+  metadata     Json?
+
+  @@index([periodStart, periodEnd])
+  @@map("demand_forecasts")
 }
 
 model ScheduledMessage {
@@ -729,6 +813,61 @@ model NotificationSubscription {
 
   @@index([userId])
   @@map("notification_subscriptions")
+}
+
+enum IntegrationProvider {
+  ZAPIER
+  N8N
+}
+
+enum IntegrationStatus {
+  SUCCESS
+  FAILED
+}
+
+enum SmsProvider {
+  TWILIO
+}
+
+model IntegrationConfig {
+  id                  String      @id @default(uuid())
+  gaMeasurementId     String?
+  zapierEnabled       Boolean     @default(false)
+  zapierWebhookUrl    String?
+  zapierAuthToken     String?
+  n8nEnabled          Boolean     @default(false)
+  n8nWebhookUrl       String?
+  n8nAuthToken        String?
+  emailChannelEnabled Boolean     @default(false)
+  smsChannelEnabled   Boolean     @default(false)
+  smsProvider         SmsProvider?
+  smsFromNumber       String?
+  smsAccountSid       String?
+  smsAuthToken        String?
+  updatedById         String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  updatedBy           User?       @relation("IntegrationConfigUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("integration_config")
+}
+
+model IntegrationLog {
+  id              String             @id @default(uuid())
+  provider        IntegrationProvider
+  eventType       String
+  status          IntegrationStatus  @default(SUCCESS)
+  statusCode      Int?
+  requestUrl      String
+  requestPayload  Json?
+  responsePayload Json?
+  error           String?
+  createdAt       DateTime           @default(now())
+
+  @@index([provider, createdAt])
+  @@index([eventType, createdAt])
+  @@map("integration_logs")
 }
 
 model AdvancedSettings {

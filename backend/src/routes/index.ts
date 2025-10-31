@@ -79,6 +79,13 @@ import {
   triggerTestNotification
 } from '../controllers/notificationController';
 import {
+  getIntegrationSettingsHandler,
+  updateIntegrationSettingsHandler,
+  listIntegrationLogsHandler,
+  getPublicAnalyticsConfigHandler
+} from '../controllers/integrationController';
+import { getMultichannelCapabilitiesHandler } from '../controllers/multichannelController';
+import {
   performAdvancedSearch,
   listAdvancedSearchHistory,
   clearAdvancedSearchHistory
@@ -126,6 +133,12 @@ import {
   downloadReportSnapshotHandler
 } from '../controllers/reportController';
 import {
+  getTicketInsightsHandler,
+  getDemandForecastHandler,
+  previewChatbotReplyHandler,
+  regenerateSuggestionsHandler
+} from '../controllers/aiController';
+import {
   listCampaignController,
   getCampaignController,
   createCampaignController,
@@ -152,6 +165,8 @@ import {
 } from '../controllers/settingsController';
 
 const router = Router();
+
+router.get('/public/integrations/analytics', getPublicAnalyticsConfigHandler);
 
 // Auth routes
 router.post('/auth/login', login);
@@ -274,6 +289,14 @@ router.post('/notifications/subscribe', authMiddleware, subscribeToPush);
 router.post('/notifications/unsubscribe', authMiddleware, unsubscribeFromPush);
 router.post('/notifications/test', authMiddleware, triggerTestNotification);
 
+// Multichannel
+router.get('/multichannel/capabilities', authMiddleware, getMultichannelCapabilitiesHandler);
+
+// Integration settings
+router.get('/settings/integrations', authMiddleware, adminOnly, getIntegrationSettingsHandler);
+router.put('/settings/integrations', authMiddleware, adminOnly, updateIntegrationSettingsHandler);
+router.get('/settings/integrations/logs', authMiddleware, adminOnly, listIntegrationLogsHandler);
+
 // Advanced settings
 router.get('/settings/advanced', authMiddleware, adminOnly, getAdvancedSettingsHandler);
 router.put('/settings/advanced/general', authMiddleware, adminOnly, updateGeneralSettingsHandler);
@@ -326,5 +349,11 @@ router.get('/reports/snapshots/:id/download', authMiddleware, downloadReportSnap
 // Satisfaction
 router.get('/satisfaction/overview', authMiddleware, getSatisfactionOverview);
 router.get('/satisfaction/responses', authMiddleware, listSatisfactionResponsesHandler);
+
+// AI
+router.get('/ai/tickets/:ticketId/insights', authMiddleware, getTicketInsightsHandler);
+router.post('/ai/messages/:messageId/regenerate', authMiddleware, regenerateSuggestionsHandler);
+router.post('/ai/chatbot/preview', authMiddleware, previewChatbotReplyHandler);
+router.get('/ai/forecast', authMiddleware, adminOnly, getDemandForecastHandler);
 
 export default router;

@@ -202,6 +202,13 @@ async function main() {
   console.log('Respostas rapidas criadas');
 
   // WhatsApp connection
+  const integrationConfig = await prisma.integrationConfig.findFirst();
+  if (!integrationConfig) {
+    await prisma.integrationConfig.create({ data: {} });
+    console.log('Configuracoes de integracao inicializadas');
+  }
+
+
   await ensureWhatsAppConnection();
   console.log('Conexao WhatsApp preparada');
 

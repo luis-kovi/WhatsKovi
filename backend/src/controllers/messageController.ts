@@ -5,8 +5,16 @@ import prisma from "../config/database";
 import { AuthRequest } from "../middleware/auth";
 import { sendWhatsAppMessage } from "../services/whatsappService";
 import { applyAutomaticTagsToTicket } from "../services/tagAutomation";
+import { processMessageWithAi } from "../services/aiOrchestrator";
 import { io } from "../server";
-import { MessageType } from "@prisma/client";
+import { Prisma, MessageChannel, MessageStatus, MessageType } from "@prisma/client";
+import {
+  canSendEmailChannel,
+  canSendSmsChannel,
+  sendEmailChannelMessage,
+  sendSmsChannelMessage
+} from "../services/multiChannelService";
+import { emitMessageEvent } from "../services/integrationService";
 
 const getMessageTypeFromFile = (mimetype?: string | null): MessageType => {
   if (!mimetype) return MessageType.DOCUMENT;
@@ -19,7 +27,10 @@ const getMessageTypeFromFile = (mimetype?: string | null): MessageType => {
 const isValidMessageType = (value?: string): value is MessageType =>
   !!value && (Object.values(MessageType) as string[]).includes(value);
 
-const messageInclude = {
+const isValidMessageChannel = (value?: string): value is MessageChannel =>
+  !!value && (Object.values(MessageChannel) as string[]).includes(value);
+
+const messageInclude: Prisma.MessageInclude = {
   user: { select: { id: true, name: true, avatar: true } },
   quotedMessage: {
     select: {
@@ -36,7 +47,7 @@ const messageInclude = {
       user: { select: { id: true, name: true, avatar: true } }
     }
   }
-} as const;
+};
 
 const emitMessageUpdate = async (ticketId: string, messageId: string) => {
   const message = await prisma.message.findUnique({
@@ -55,11 +66,16 @@ const emitMessageUpdate = async (ticketId: string, messageId: string) => {
 
 export const sendMessage = async (req: AuthRequest, res: Response) => {
   try {
-    const { ticketId, quotedMsgId } = req.body as { ticketId?: string; quotedMsgId?: string };
+    const { ticketId, quotedMsgId } = req.body as {
+      ticketId?: string;
+      quotedMsgId?: string;
+      channel?: string;
+    };
     const userId = req.user!.id;
     const isPrivate = req.body.isPrivate === "true" || req.body.isPrivate === true;
     const providedType = req.body.type as string | undefined;
     const providedBody = req.body.body as string | undefined;
+    const providedChannel = req.body.channel as string | undefined;
 
     if (!ticketId) {
       return res.status(400).json({ error: "TicketId e obrigatorio" });
@@ -82,6 +98,39 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
     }
 
     const hasFile = Boolean(req.file);
+    const selectedChannel: MessageChannel = isPrivate
+      ? MessageChannel.INTERNAL
+      : isValidMessageChannel(providedChannel)
+      ? providedChannel
+      : MessageChannel.WHATSAPP;
+
+    if (!isPrivate && selectedChannel === MessageChannel.INTERNAL) {
+      return res.status(400).json({ error: "Canal interno permitido apenas para notas privadas" });
+    }
+
+    if (selectedChannel !== MessageChannel.WHATSAPP && hasFile) {
+      return res.status(400).json({ error: "O canal selecionado nao suporta envio de anexos" });
+    }
+
+    if (selectedChannel === MessageChannel.WHATSAPP && !ticket.whatsapp) {
+      return res.status(409).json({ error: "Conexao WhatsApp indisponivel para este ticket" });
+    }
+
+    if (selectedChannel === MessageChannel.EMAIL) {
+      if (!ticket.contact.email) {
+        return res.status(400).json({ error: "Contato nao possui email cadastrado" });
+      }
+      if (!(await canSendEmailChannel())) {
+        return res.status(503).json({ error: "Envio por email nao configurado" });
+      }
+    }
+
+    if (selectedChannel === MessageChannel.SMS) {
+      if (!(await canSendSmsChannel())) {
+        return res.status(503).json({ error: "Envio por SMS nao configurado" });
+      }
+    }
+
     const mediaUrl = hasFile ? `/uploads/${req.file!.filename}` : (req.body.mediaUrl as string | null) || null;
     const messageType: MessageType = hasFile
       ? getMessageTypeFromFile(req.file?.mimetype)
@@ -99,15 +148,19 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Mensagem vazia" });
     }
 
+    const initialStatus =
+      selectedChannel === MessageChannel.INTERNAL || isPrivate ? MessageStatus.SENT : MessageStatus.PENDING;
+
     const message = await prisma.message.create({
       data: {
         body: messageBody,
         type: messageType,
+        channel: selectedChannel,
+        status: initialStatus,
         mediaUrl,
         isPrivate,
         ticketId,
         userId,
-        status: "PENDING",
         quotedMsgId: quotedMsgId || undefined
       },
       include: messageInclude
@@ -128,22 +181,62 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
 
     let finalMessage = message;
 
-    if (!isPrivate && ticket.whatsapp) {
-      const mediaPath = hasFile ? req.file?.path : undefined;
+    if (!isPrivate && selectedChannel !== MessageChannel.INTERNAL) {
+      const deliveryMetadata: Prisma.JsonObject = {
+        channel: selectedChannel
+      };
 
-      await sendWhatsAppMessage(
-        ticket.whatsapp.id,
-        ticket.contact.phoneNumber,
-        messageBody,
-        mediaUrl,
-        mediaPath ? path.resolve(mediaPath) : undefined
-      );
+      try {
+        if (selectedChannel === MessageChannel.WHATSAPP) {
+          const mediaPath = hasFile ? req.file?.path : undefined;
 
-      finalMessage = await prisma.message.update({
-        where: { id: message.id },
-        data: { status: "SENT" },
-        include: messageInclude
-      });
+          await sendWhatsAppMessage(
+            ticket.whatsapp!.id,
+            ticket.contact.phoneNumber,
+            messageBody,
+            mediaUrl,
+            mediaPath ? path.resolve(mediaPath) : undefined
+          );
+        } else if (selectedChannel === MessageChannel.EMAIL) {
+          const subject = `Atendimento WhatsKovi - Ticket ${ticketId}`;
+          const emailResult = await sendEmailChannelMessage({
+            to: ticket.contact.email!,
+            subject,
+            text: messageBody,
+            html: `<p>${messageBody.replace(/\n/g, "<br />")}</p>`
+          });
+          deliveryMetadata.provider = "smtp";
+          deliveryMetadata.messageId = emailResult.messageId;
+        } else if (selectedChannel === MessageChannel.SMS) {
+          const smsResult = await sendSmsChannelMessage(ticket.contact.phoneNumber, messageBody);
+          deliveryMetadata.provider = "twilio";
+          deliveryMetadata.sid = smsResult.sid;
+          deliveryMetadata.status = smsResult.status ?? null;
+        }
+
+        finalMessage = await prisma.message.update({
+          where: { id: message.id },
+          data: {
+            status: MessageStatus.SENT,
+            deliveryMetadata: deliveryMetadata
+          },
+          include: messageInclude
+        });
+      } catch (error) {
+        await prisma.message.update({
+          where: { id: message.id },
+          data: {
+            status: MessageStatus.FAILED
+          }
+        });
+
+        if (req.file) {
+          fs.unlink(req.file.path).catch(() => undefined);
+        }
+
+        console.error("[Messages] Falha ao enviar mensagem no canal selecionado", error);
+        return res.status(502).json({ error: "Falha ao enviar mensagem pelo canal selecionado" });
+      }
     }
 
     if (!isPrivate) {
@@ -151,6 +244,23 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
     }
 
     io.emit("message:new", { ...finalMessage, ticketId });
+
+    if (!isPrivate) {
+      emitMessageEvent(finalMessage.id, "OUTBOUND").catch((integrationError) => {
+        console.warn("[Integration] Falha ao notificar integracoes sobre mensagem enviada", integrationError);
+      });
+    }
+
+    if (!isPrivate && selectedChannel === MessageChannel.WHATSAPP) {
+      processMessageWithAi({
+        ticketId,
+        messageId: finalMessage.id,
+        actor: "agent",
+        skipPrivate: true
+      }).catch((error) => {
+        console.warn("[AI] Falha ao processar mensagem de agente", error);
+      });
+    }
 
     return res.status(201).json(finalMessage);
   } catch (error) {

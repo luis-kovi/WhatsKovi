@@ -8,7 +8,7 @@ import ServiceSettingsForm, { ServiceSettingsValues } from '@/components/setting
 import NotificationSettingsForm, {
   NotificationSettingsValues
 } from '@/components/settings/NotificationSettingsForm';
-import IntegrationSettings from '@/components/settings/IntegrationSettings';
+import { IntegrationSettings } from '@/components/settings/IntegrationSettings';
 import WhatsAppConnectionsSection from '@/components/settings/WhatsAppConnectionsSection';
 import QueueSettingsSection from '@/components/settings/QueueSettingsSection';
 import TagSettingsSection from '@/components/settings/TagSettingsSection';
@@ -19,21 +19,12 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useI18n } from '@/providers/I18nProvider';
 import type { LanguageCode } from '@/i18n/dictionaries';
 import { useRouter } from 'next/navigation';
-
-type WebhookConfig = {
-  id: string;
-  event: string;
-  url: string;
-  status: 'active' | 'paused';
-};
-
-type ApiLog = {
-  id: string;
-  method: string;
-  path: string;
-  status: number;
-  timestamp: string;
-};
+import {
+  fetchIntegrationLogs,
+  fetchIntegrationSettings,
+  persistIntegrationSettings
+} from '@/services/integrations';
+import type { IntegrationLogEntry, IntegrationSettingsFormValues } from '@/types/integrations';
 
 const DEFAULT_SERVICE_SETTINGS: ServiceSettingsValues = {
   inactivityMinutes: 15,
@@ -115,33 +106,10 @@ export default function SettingsPage() {
     DEFAULT_NOTIFICATION_SETTINGS
   );
   const [supportedLanguagesState, setSupportedLanguagesState] = useState<string[]>([]);
-  const [apiToken, setApiToken] = useState('');
-  const [webhooks] = useState<WebhookConfig[]>([
-    {
-      id: 'wh-001',
-      event: 'Novo ticket',
-      url: 'https://hooks.seusistema.com/whatskovi/new-ticket',
-      status: 'active'
-    },
-    {
-      id: 'wh-002',
-      event: 'Ticket fechado',
-      url: 'https://hooks.seusistema.com/whatskovi/ticket-closed',
-      status: 'active'
-    },
-    {
-      id: 'wh-003',
-      event: 'Nova mensagem',
-      url: 'https://hooks.seusistema.com/whatskovi/new-message',
-      status: 'paused'
-    }
-  ]);
-  const [logs] = useState<ApiLog[]>([
-    { id: 'log-1', method: 'POST', path: '/api/webhooks/new-ticket', status: 200, timestamp: '17/10/2025 12:31' },
-    { id: 'log-2', method: 'GET', path: '/api/tickets?status=open', status: 200, timestamp: '17/10/2025 12:29' },
-    { id: 'log-3', method: 'POST', path: '/api/messages', status: 201, timestamp: '17/10/2025 12:25' },
-    { id: 'log-4', method: 'POST', path: '/api/webhooks/new-message', status: 401, timestamp: '17/10/2025 12:21' }
-  ]);
+  const [integrationValues, setIntegrationValues] = useState<IntegrationSettingsFormValues | null>(null);
+  const [integrationLogs, setIntegrationLogs] = useState<IntegrationLogEntry[]>([]);
+  const [loadingIntegration, setLoadingIntegration] = useState(true);
+  const [savingIntegration, setSavingIntegration] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -209,6 +177,38 @@ export default function SettingsPage() {
       smtpSecure: notifications.smtpSecure
     });
   }, [notifications]);
+
+  useEffect(() => {
+    const loadIntegration = async () => {
+      setLoadingIntegration(true);
+      try {
+        const data = await fetchIntegrationSettings();
+        setIntegrationValues({
+          measurementId: data.analytics.measurementId ?? '',
+          zapierEnabled: data.zapier.enabled,
+          zapierWebhookUrl: data.zapier.webhookUrl ?? '',
+          zapierAuthToken: '',
+          n8nEnabled: data.n8n.enabled,
+          n8nWebhookUrl: data.n8n.webhookUrl ?? '',
+          n8nAuthToken: '',
+          emailChannelEnabled: data.multichannel.emailEnabled,
+          smsChannelEnabled: data.multichannel.smsEnabled,
+          smsProvider: data.multichannel.smsProvider === 'TWILIO' ? 'TWILIO' : '',
+          smsFromNumber: data.multichannel.smsFromNumber ?? '',
+          smsAccountSid: '',
+          smsAuthToken: ''
+        });
+        setIntegrationLogs(data.logs);
+      } catch (error) {
+        console.error('[Settings] failed to load integration settings', error);
+        toast.error('Não foi possível carregar as integrações');
+      } finally {
+        setLoadingIntegration(false);
+      }
+    };
+
+    loadIntegration();
+  }, []);
 
   const ready = useMemo(
     () =>
@@ -288,10 +288,50 @@ export default function SettingsPage() {
     };
 
     const result = await saveNotifications(payload);
-    if (result) {
-      toast.success(t('settings.toasts.notificationsSaved'));
-    } else {
-      toast.error(t('settings.toasts.errorGeneric'));
+      if (result) {
+        toast.success(t('settings.toasts.notificationsSaved'));
+      } else {
+        toast.error(t('settings.toasts.errorGeneric'));
+      }
+    };
+
+  const handleIntegrationSave = async (values: IntegrationSettingsFormValues) => {
+    setSavingIntegration(true);
+    try {
+      const updated = await persistIntegrationSettings(values);
+      setIntegrationValues({
+        measurementId: updated.analytics.measurementId ?? '',
+        zapierEnabled: updated.zapier.enabled,
+        zapierWebhookUrl: updated.zapier.webhookUrl ?? '',
+        zapierAuthToken: '',
+        n8nEnabled: updated.n8n.enabled,
+        n8nWebhookUrl: updated.n8n.webhookUrl ?? '',
+        n8nAuthToken: '',
+        emailChannelEnabled: updated.multichannel.emailEnabled,
+        smsChannelEnabled: updated.multichannel.smsEnabled,
+        smsProvider: updated.multichannel.smsProvider === 'TWILIO' ? 'TWILIO' : '',
+        smsFromNumber: updated.multichannel.smsFromNumber ?? '',
+        smsAccountSid: '',
+        smsAuthToken: ''
+      });
+      setIntegrationLogs(updated.logs);
+      toast.success('Integrações atualizadas com sucesso');
+    } catch (error) {
+      console.error('[Settings] failed to persist integration settings', error);
+      toast.error('Não foi possível salvar as integrações');
+    } finally {
+      setSavingIntegration(false);
+    }
+  };
+
+  const handleRefreshIntegrationLogs = async () => {
+    try {
+      const refreshed = await fetchIntegrationLogs();
+      setIntegrationLogs(refreshed);
+      toast.success('Logs atualizados');
+    } catch (error) {
+      console.error('[Settings] failed to refresh integration logs', error);
+      toast.error('Não foi possível atualizar os logs');
     }
   };
 
@@ -356,16 +396,6 @@ export default function SettingsPage() {
 
   const handleDeleteTag = async (id: string) => {
     await deleteTag(id);
-  };
-
-  const handleGenerateToken = () => {
-    const randomPart =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? (crypto.randomUUID() as string).replace(/-/g, '')
-        : Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const token = randomPart.padEnd(32, 'x').slice(0, 32);
-    setApiToken(token);
-    toast.success(t('settings.integration.tokenGenerated'));
   };
 
   if (!ready || !generalSettings || !serviceSettings || !notificationSettings) {
@@ -434,10 +464,12 @@ export default function SettingsPage() {
           <QuickReplySettingsSection />
 
           <IntegrationSettings
-            token={apiToken}
-            onGenerateToken={handleGenerateToken}
-            webhooks={webhooks}
-            logs={logs}
+            initialValues={integrationValues}
+            loading={loadingIntegration}
+            saving={savingIntegration}
+            logs={integrationLogs}
+            onSave={handleIntegrationSave}
+            onRefreshLogs={handleRefreshIntegrationLogs}
           />
         </div>
       </div>

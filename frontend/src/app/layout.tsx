@@ -4,6 +4,7 @@ import './globals.css'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { I18nProvider } from '@/providers/I18nProvider'
 import { ThemeToaster } from '@/components/common/ThemeToaster'
+import { AnalyticsLoader } from '@/components/analytics/AnalyticsLoader'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -73,6 +74,7 @@ export default function RootLayout({
         className={`${inter.className} bg-gray-50 text-gray-900 antialiased transition-colors duration-300 ease-in-out dark:bg-slate-950 dark:text-slate-100`}
       >
         <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <AnalyticsLoader />
         <I18nProvider>
           <ThemeProvider>
             {children}

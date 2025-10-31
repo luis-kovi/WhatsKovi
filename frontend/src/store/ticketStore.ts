@@ -1,11 +1,13 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import api from '@/services/api';
 import type { AxiosProgressEvent } from 'axios';
 import { getSocket } from '@/services/socket';
 import { resolveAssetUrl } from '@/utils/media';
+import { AiChatbotReply, AiSuggestion, DemandForecastPayload, TicketAiInsights } from '@/types/ai';
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'NOTE';
 export type MessageStatus = 'PENDING' | 'SENT' | 'RECEIVED' | 'READ';
+export type MessageChannel = 'WHATSAPP' | 'EMAIL' | 'SMS' | 'INTERNAL';
 
 export interface ReactionUser {
   id: string;
@@ -35,6 +37,7 @@ export interface TicketMessage {
   ticketId: string;
   body: string | null;
   type: MessageType;
+  channel: MessageChannel;
   status: MessageStatus;
   mediaUrl?: string | null;
   isPrivate?: boolean;
@@ -67,6 +70,7 @@ export interface Ticket {
     id: string;
     name: string;
     phoneNumber: string;
+    email?: string | null;
     avatar?: string | null;
   };
   user?: ReactionUser | null;
@@ -101,6 +105,7 @@ export type SendMessagePayload = {
   quotedMsgId?: string | null;
   mediaFile?: File;
   type?: MessageType;
+  channel?: MessageChannel;
   onUploadProgress?: (progress: number) => void;
 };
 
@@ -139,7 +144,7 @@ interface TicketState {
     queueId?: string | null;
     priority?: string;
     tagIds?: string[];
-    carPlate: string;
+    carPlate?: string | null;
   }) => Promise<string | null>;
   loadMessages: (ticketId: string, options?: { force?: boolean }) => Promise<void>;
   sendMessage: (payload: SendMessagePayload) => Promise<TicketMessage | null>;
@@ -148,6 +153,14 @@ interface TicketState {
   addReaction: (ticketId: string, messageId: string, emoji: string) => Promise<void>;
   removeReaction: (ticketId: string, messageId: string, reactionId: string) => Promise<void>;
   setQuotedMessage: (message: TicketMessage | null) => void;
+  aiSuggestionsByMessage: Record<string, AiSuggestion[]>;
+  aiChatbotDrafts: Record<string, AiChatbotReply>;
+  aiInsightsByTicket: Record<string, TicketAiInsights>;
+  demandForecast: DemandForecastPayload | null;
+  fetchTicketInsights: (ticketId: string) => Promise<void>;
+  previewChatbotReply: (ticketId: string, message: string) => Promise<AiChatbotReply | null>;
+  regenerateSuggestions: (messageId: string, ticketId: string) => Promise<void>;
+  loadDemandForecast: (options?: { horizon?: number; refresh?: boolean }) => Promise<void>;
   setupSocketListeners: () => void;
 }
 
@@ -173,6 +186,7 @@ type RawMessage = {
   body?: string | null;
   type?: MessageType;
   status?: MessageStatus;
+  channel?: MessageChannel;
   mediaUrl?: string | null;
   isPrivate?: boolean;
   createdAt: string;
@@ -297,14 +311,15 @@ const normalizeMessage = (message: RawMessage, ticketId: string): TicketMessage 
       }))
     : [];
 
-  return {
-    id: message.id,
-    ticketId,
-    body: message.body ?? null,
-    type: (message.type ?? 'TEXT') as MessageType,
-    status: (message.status ?? 'PENDING') as MessageStatus,
-    mediaUrl: resolveAssetUrl(message.mediaUrl ?? null),
-    isPrivate: Boolean(message.isPrivate),
+    return {
+      id: message.id,
+      ticketId,
+      body: message.body ?? null,
+      type: (message.type ?? 'TEXT') as MessageType,
+      channel: (message.channel ?? 'WHATSAPP') as MessageChannel,
+      status: (message.status ?? 'PENDING') as MessageStatus,
+      mediaUrl: resolveAssetUrl(message.mediaUrl ?? null),
+      isPrivate: Boolean(message.isPrivate),
     createdAt: message.createdAt,
     editedAt: message.editedAt ?? null,
     editedBy: message.editedBy ?? null,
@@ -348,6 +363,10 @@ export const useTicketStore = create<TicketState>((set, get) => ({
   messagesByTicket: {},
   messagesLoaded: {},
   quotedMessage: null,
+  aiSuggestionsByMessage: {},
+  aiChatbotDrafts: {},
+  aiInsightsByTicket: {},
+  demandForecast: null,
 
   fetchTickets: async (overrides = {}) => {
     const currentFilters =
@@ -435,6 +454,14 @@ export const useTicketStore = create<TicketState>((set, get) => ({
           quotedMessage: null
         };
       });
+
+      await get().fetchTicketInsights(ticketId);
+
+      if (!get().demandForecast) {
+        get()
+          .loadDemandForecast()
+          .catch((error) => console.warn('Erro ao carregar previsao de demanda', error));
+      }
     } catch (error) {
       console.error('Erro ao buscar ticket:', error);
     }
@@ -555,7 +582,25 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
   createManualTicket: async (payload) => {
     try {
-      const response = await api.post<Ticket>('/tickets', payload);
+      const phoneDigits = payload.phoneNumber.replace(/\D/g, '');
+      const existingActive = get().tickets.find((ticket) => {
+        const ticketPhone = ticket.contact.phoneNumber?.replace(/\D/g, '');
+        return (
+          ticketPhone === phoneDigits && (ticket.status === 'PENDING' || ticket.status === 'OPEN')
+        );
+      });
+
+      if (existingActive) {
+        throw new Error('Ja existe um ticket pendente ou em atendimento para este contato.');
+      }
+
+      const requestBody = {
+        ...payload,
+        phoneNumber: phoneDigits,
+        carPlate: payload.carPlate ?? undefined
+      };
+
+      const response = await api.post<Ticket>('/tickets', requestBody);
       const created = normalizeTicket(response.data);
 
       set((state) => ({
@@ -598,18 +643,37 @@ export const useTicketStore = create<TicketState>((set, get) => ({
     }
   },
 
-  sendMessage: async ({ ticketId, body, isPrivate, quotedMsgId, mediaFile, type, onUploadProgress }) => {
+  sendMessage: async ({
+    ticketId,
+    body,
+    isPrivate,
+    quotedMsgId,
+    mediaFile,
+    type,
+    channel,
+    onUploadProgress
+  }) => {
     try {
+      const state = get();
+      const ticketBeforeSend =
+        state.tickets.find((ticket) => ticket.id === ticketId) ??
+        (state.selectedTicket && state.selectedTicket.id === ticketId ? state.selectedTicket : null);
+
+      if (ticketBeforeSend && ticketBeforeSend.status === 'PENDING') {
+        await state.acceptTicket(ticketId);
+      }
+
       let response;
 
-      if (mediaFile) {
-        const formData = new FormData();
-        formData.append('ticketId', ticketId);
-        if (body) formData.append('body', body);
-        formData.append('media', mediaFile);
-        if (isPrivate) formData.append('isPrivate', 'true');
-        if (quotedMsgId) formData.append('quotedMsgId', quotedMsgId);
-        if (type) formData.append('type', type);
+        if (mediaFile) {
+          const formData = new FormData();
+          formData.append('ticketId', ticketId);
+          if (body) formData.append('body', body);
+          formData.append('media', mediaFile);
+          if (isPrivate) formData.append('isPrivate', 'true');
+          if (quotedMsgId) formData.append('quotedMsgId', quotedMsgId);
+          if (type) formData.append('type', type);
+          if (!isPrivate && channel) formData.append('channel', channel);
 
         response = await api.post<RawMessage>('/messages', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -623,15 +687,16 @@ export const useTicketStore = create<TicketState>((set, get) => ({
               }
             : {})
         });
-      } else {
-        response = await api.post<RawMessage>('/messages', {
-          ticketId,
-          body,
-          isPrivate,
-          quotedMsgId,
-          type
-        });
-      }
+        } else {
+          response = await api.post<RawMessage>('/messages', {
+            ticketId,
+            body,
+            isPrivate,
+            quotedMsgId,
+            type,
+            channel: !isPrivate ? channel : undefined
+          });
+        }
 
       if (onUploadProgress) {
         onUploadProgress(100);
@@ -810,6 +875,105 @@ export const useTicketStore = create<TicketState>((set, get) => ({
     set({ quotedMessage: message });
   },
 
+  fetchTicketInsights: async (ticketId: string) => {
+    try {
+      const { data } = await api.get<TicketAiInsights>(`/ai/tickets/${ticketId}/insights`);
+
+      set((state) => {
+        const grouped = data.suggestions.reduce<Record<string, AiSuggestion[]>>((acc, item) => {
+          if (!acc[item.messageId]) {
+            acc[item.messageId] = [];
+          }
+          acc[item.messageId].push({
+            text: item.suggestion,
+            confidence: item.confidence ?? undefined,
+            source: item.source ?? null
+          });
+          return acc;
+        }, {});
+
+        const suggestionsByMessage = { ...state.aiSuggestionsByMessage };
+        Object.entries(grouped).forEach(([messageId, suggestions]) => {
+          suggestionsByMessage[messageId] = suggestions;
+        });
+
+        return {
+          aiInsightsByTicket: {
+            ...state.aiInsightsByTicket,
+            [ticketId]: data
+          },
+          aiSuggestionsByMessage: suggestionsByMessage
+        };
+      });
+    } catch (error) {
+      console.error('Erro ao carregar insights de IA', error);
+    }
+  },
+
+  previewChatbotReply: async (ticketId: string, message: string) => {
+    try {
+      const { data } = await api.post<AiChatbotReply>('/ai/chatbot/preview', { ticketId, message });
+
+      set((state) => ({
+        aiChatbotDrafts: {
+          ...state.aiChatbotDrafts,
+          [ticketId]: data
+        }
+      }));
+
+      return data;
+    } catch (error) {
+      console.error('Erro ao gerar resposta automática de IA', error);
+      return null;
+    }
+  },
+
+  regenerateSuggestions: async (messageId: string, ticketId: string) => {
+    try {
+      const { data } = await api.post<{
+        suggestions: Array<{ suggestion: string; confidence: number | null; source: string | null }>;
+        autoReply: AiChatbotReply | null;
+      }>(`/ai/messages/${messageId}/regenerate`);
+
+      const mappedSuggestions =
+        data.suggestions?.map((item) => ({
+          text: item.suggestion,
+          confidence: item.confidence ?? undefined,
+          source: item.source ?? null
+        })) ?? [];
+
+      set((state) => ({
+        aiSuggestionsByMessage: {
+          ...state.aiSuggestionsByMessage,
+          [messageId]: mappedSuggestions
+        },
+        aiChatbotDrafts: data.autoReply
+          ? {
+              ...state.aiChatbotDrafts,
+              [ticketId]: data.autoReply
+            }
+          : state.aiChatbotDrafts
+      }));
+    } catch (error) {
+      console.error('Erro ao regenerar sugestoes de IA', error);
+    }
+  },
+
+  loadDemandForecast: async (options?: { horizon?: number; refresh?: boolean }) => {
+    try {
+      const { data } = await api.get<DemandForecastPayload>('/ai/forecast', {
+        params: {
+          horizon: options?.horizon,
+          refresh: options?.refresh
+        }
+      });
+
+      set({ demandForecast: data });
+    } catch (error) {
+      console.error('Erro ao carregar previsao de demanda', error);
+    }
+  },
+
   setupSocketListeners: () => {
     const socket = getSocket();
     if (!socket || socketListenersBound) return;
@@ -924,6 +1088,38 @@ export const useTicketStore = create<TicketState>((set, get) => ({
           messagesLoaded: { ...state.messagesLoaded, [ticketId]: true }
         };
       });
+    });
+
+    socket.on(
+      'ai:suggestions',
+      (payload: { ticketId: string; messageId: string; suggestions: AiSuggestion[] }) => {
+        set((state) => ({
+          aiSuggestionsByMessage: {
+            ...state.aiSuggestionsByMessage,
+            [payload.messageId]: payload.suggestions
+          }
+        }));
+      }
+    );
+
+    socket.on(
+      'ai:chatbotSuggestion',
+      (payload: { ticketId: string; messageId: string; reply: AiChatbotReply }) => {
+        set((state) => ({
+          aiChatbotDrafts: {
+            ...state.aiChatbotDrafts,
+            [payload.ticketId]: payload.reply
+          }
+        }));
+      }
+    );
+
+    socket.on('ai:insights', (payload: { ticketId: string }) => {
+      get().fetchTicketInsights(payload.ticketId);
+    });
+
+    socket.on('ai:forecast', (payload: DemandForecastPayload) => {
+      set({ demandForecast: payload });
     });
   }
 }));

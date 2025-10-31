@@ -50,6 +50,15 @@ httpServer.listen(PORT, () => {
   bootstrapMessageCampaigns().catch((error) => {
     console.error('Failed to bootstrap message campaigns:', error);
   });
+  import('./services/aiOrchestrator')
+    .then(({ rebuildDemandForecast }) =>
+      rebuildDemandForecast().catch((error) => {
+        console.error('[AI] Failed to bootstrap demand forecast', error);
+      })
+    )
+    .catch((error) => {
+      console.error('[AI] Failed to initialize AI services', error);
+    });
 });
 
 export { io };

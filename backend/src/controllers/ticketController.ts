@@ -13,6 +13,7 @@ import {
   validateTagIdentifiers
 } from '../services/tagAutomation';
 import { notifyNewTicketCreated, notifyTicketTransferred } from '../services/notificationTriggers';
+import { emitTicketCreatedEvent } from '../services/integrationService';
 import { triggerSurveyForTicket } from '../services/satisfactionSurveyService';
 import { runAutomations } from '../services/automationService';
 
@@ -375,6 +376,9 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
     io.emit('ticket:new', fullTicket);
     await notifyNewTicketCreated(fullTicket, req.user?.id);
 
+    emitTicketCreatedEvent(fullTicket.id).catch((error) => {
+      console.warn('[Integration] Failed to emit ticket.created event (manual)', error);
+    });
     return res.status(201).json(fullTicket);
   } catch (error) {
     console.error('Erro ao criar ticket manual:', error);

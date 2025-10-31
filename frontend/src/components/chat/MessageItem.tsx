@@ -1,6 +1,17 @@
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { Check, CheckCheck, CornerUpRight, MoreVertical, Paperclip, Pencil, StickyNote, Trash2 } from 'lucide-react';
+import {
+  Check,
+  CheckCheck,
+  CornerUpRight,
+  Mail,
+  MoreVertical,
+  Paperclip,
+  Pencil,
+  Smartphone,
+  StickyNote,
+  Trash2
+} from 'lucide-react';
 
 import { resolveAssetUrl } from '@/utils/media';
 import type { MessageReaction, TicketMessage } from '@/store/ticketStore';
@@ -155,6 +166,27 @@ export function MessageItem({
       : 'ring-2 ring-primary/60 shadow-lg'
     : '';
 
+  const channelBadge =
+    !isPrivateNote && message.channel && message.channel !== 'WHATSAPP'
+      ? (() => {
+          if (message.channel === 'EMAIL') {
+            return {
+              label: 'E-mail',
+              className: isDarkTheme ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700',
+              icon: <Mail size={12} />
+            };
+          }
+          if (message.channel === 'SMS') {
+            return {
+              label: 'SMS',
+              className: isDarkTheme ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700',
+              icon: <Smartphone size={12} />
+            };
+          }
+          return null;
+        })()
+      : null;
+
   return (
     <div className={`flex ${isFromAgent ? 'justify-end' : 'justify-start'}`} data-message-id={message.id}>
       <div
@@ -199,6 +231,15 @@ export function MessageItem({
             </span>
             <span className="text-white/70">Nao visivel para o cliente</span>
           </div>
+        )}
+
+        {channelBadge && (
+          <span
+            className={`mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${channelBadge.className}`}
+          >
+            {channelBadge.icon}
+            {channelBadge.label}
+          </span>
         )}
 
         {message.quotedMessage && (
@@ -317,3 +358,4 @@ export function MessageItem({
     </div>
   );
 }
+

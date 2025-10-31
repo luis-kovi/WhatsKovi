@@ -3,6 +3,7 @@ import {
   MessageCampaignStatus,
   MessageCampaignRecipientStatus,
   MessageCampaignLogType,
+  MessageChannel,
   MessageStatus,
   MessageType,
   Prisma,
@@ -15,6 +16,7 @@ import { SegmentFilters, buildContactWhere, parseSegmentFilters } from '../utils
 import { sendWhatsAppMessage } from './whatsappService';
 import { applyAutomaticTagsToTicket } from './tagAutomation';
 import { io } from '../server';
+import { emitMessageEvent, emitTicketCreatedEvent } from './integrationService';
 
 const connection = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const queueName = 'message:campaign';
@@ -260,7 +262,7 @@ const findOrCreateTicketForContact = async (options: {
     return existing;
   }
 
-  return prisma.ticket.create({
+  const created = await prisma.ticket.create({
     data: {
       contactId,
       whatsappId,
@@ -271,6 +273,12 @@ const findOrCreateTicketForContact = async (options: {
       unreadMessages: 0
     }
   });
+
+  emitTicketCreatedEvent(created.id).catch((error) => {
+    console.warn('[Integration] Failed to emit ticket.created event (campaign)', error);
+  });
+
+  return created;
 };
 
 const buildFiltersSnapshot = (payload: {
@@ -856,6 +864,7 @@ const sendCampaignMessage = async (input: {
         status: MessageStatus.PENDING,
         mediaUrl: campaign.mediaUrl,
         isPrivate: false,
+        channel: MessageChannel.WHATSAPP,
         ticketId: ticket.id,
         userId: campaign.createdById
       }
@@ -920,6 +929,9 @@ const sendCampaignMessage = async (input: {
     await applyAutomaticTagsToTicket(ticket.id, campaign.body);
 
     io.emit('message:new', { ...finalMessage, ticketId: ticket.id });
+    emitMessageEvent(finalMessage.id, 'OUTBOUND').catch((error) => {
+      console.warn('[Integration] Failed to emit campaign message event', error);
+    });
 
     await recordCampaignLog(
       campaign.id,
@@ -931,6 +943,12 @@ const sendCampaignMessage = async (input: {
 
     return { messageId, ticketId };
   } catch (error) {
+    if (messageId) {
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { status: MessageStatus.FAILED }
+      }).catch(() => undefined);
+    }
     const wrapped =
       error instanceof Error ? error : new Error(typeof error === 'string' ? error : 'Falha ao enviar mensagem.');
     (wrapped as Error & { campaignContext?: { messageId: string | null; ticketId: string | null } }).campaignContext = {

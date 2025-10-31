@@ -1,4 +1,4 @@
-import { ChatbotSender, Prisma } from '@prisma/client';
+import { ChatbotSender, MessageChannel, MessageStatus, Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import {
   ChatbotFlowDefinition,
@@ -12,6 +12,7 @@ import {
 import { sendWhatsAppMessage } from './whatsappService';
 import { io } from '../server';
 import { ticketInclude } from '../utils/ticketInclude';
+import { emitMessageEvent } from './integrationService';
 
 type TicketChatbotContext = Prisma.TicketGetPayload<{
   include: {
@@ -572,7 +573,8 @@ const dispatchBotMessages = async (
         data: {
           body: content,
           type: 'TEXT',
-          status: 'SENT',
+          status: MessageStatus.SENT,
+          channel: MessageChannel.WHATSAPP,
           ticketId: ticket.id
         },
         include: messageInclude
@@ -602,6 +604,9 @@ const dispatchBotMessages = async (
 
     if (persisted) {
       io.emit('message:new', { ...persisted, ticketId: ticket.id });
+      emitMessageEvent(persisted.id, 'OUTBOUND').catch((error) => {
+        console.warn('[Integration] Failed to emit chatbot message event', error);
+      });
     }
   }
 
@@ -628,7 +633,8 @@ const sendOfflineMessage = async (ticket: TicketChatbotContext, message: string)
       data: {
         body: content,
         type: 'TEXT',
-        status: 'SENT',
+        status: MessageStatus.SENT,
+        channel: MessageChannel.WHATSAPP,
         ticketId: ticket.id
       },
       include: messageInclude
@@ -645,6 +651,9 @@ const sendOfflineMessage = async (ticket: TicketChatbotContext, message: string)
 
   if (persisted) {
     io.emit('message:new', { ...persisted, ticketId: ticket.id });
+    emitMessageEvent(persisted.id, 'OUTBOUND').catch((error) => {
+      console.warn('[Integration] Failed to emit offline chatbot message event', error);
+    });
   }
 
   await prisma.ticket.update({
