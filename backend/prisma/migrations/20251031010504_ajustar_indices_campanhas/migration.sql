@@ -129,7 +129,7 @@ CREATE TABLE "message_campaign_recipients" (
     "campaignId" TEXT NOT NULL,
     "contactId" TEXT NOT NULL,
     "ticketId" TEXT,
-    "" TEXT,
+    "messageId_text" TEXT,
     "status" "MessageCampaignRecipientStatus" NOT NULL DEFAULT 'PENDING',
     "error" TEXT,
     "scheduledAt" TIMESTAMP(3),
