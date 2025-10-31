@@ -18,7 +18,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: 'https://whatskovi.vercel.app',
+    origin: 'http://localhost:3001/api',
     methods: ['GET', 'POST']
   }
 });
@@ -26,7 +26,7 @@ const io = new Server(httpServer, {
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://whatskovi.vercel.app', // Adicione esta linha
+    'https://whatskovi.vercel.app', 
     /\.vercel\.app$/ // Aceita todos os subdomínios .vercel.app
   ],
   credentials: true
