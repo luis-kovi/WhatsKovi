@@ -53,7 +53,7 @@ CREATE TABLE "message_insights" (
 -- CreateTable
 CREATE TABLE "message_suggestions" (
     "id" TEXT NOT NULL,
-    "messageId_text" TEXT NOT NULL,
+    "messageId" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
     "suggestion" TEXT NOT NULL,
     "confidence" DOUBLE PRECISION,
@@ -129,7 +129,7 @@ CREATE TABLE "message_campaign_recipients" (
     "campaignId" TEXT NOT NULL,
     "contactId" TEXT NOT NULL,
     "ticketId" TEXT,
-    "messageId_text" TEXT,
+    "messageId" TEXT,
     "status" "MessageCampaignRecipientStatus" NOT NULL DEFAULT 'PENDING',
     "error" TEXT,
     "scheduledAt" TIMESTAMP(3),
@@ -195,7 +195,7 @@ CREATE TABLE "integration_logs" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "message_insights_messageId_key" ON "message_insights"("messageId_text");
+CREATE UNIQUE INDEX "message_insights_messageId_key" ON "message_insights"("messageId");
 
 -- CreateIndex
 CREATE INDEX "message_suggestions_ticketId_idx" ON "message_suggestions"("ticketId");
