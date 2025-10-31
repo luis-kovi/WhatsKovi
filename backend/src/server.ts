@@ -18,16 +18,20 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: 'https://whatskovi.vercel.app',
     methods: ['GET', 'POST']
   }
 });
 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000'
-  })
-);
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://whatskovi.vercel.app', // Adicione esta linha
+    /\.vercel\.app$/ // Aceita todos os subdomínios .vercel.app
+  ],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
