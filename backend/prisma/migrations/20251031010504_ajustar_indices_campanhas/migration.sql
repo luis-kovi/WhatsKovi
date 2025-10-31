@@ -195,7 +195,7 @@ CREATE TABLE "integration_logs" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "message_insights__key" ON "message_insights"("");
+CREATE UNIQUE INDEX "message_insights_messageId_key" ON "message_insights"("messageId");
 
 -- CreateIndex
 CREATE INDEX "message_suggestions_ticketId_idx" ON "message_suggestions"("ticketId");
