@@ -13,24 +13,34 @@ import { bootstrapScheduledMessages } from './services/scheduledMessageService';
 import { bootstrapMessageCampaigns } from './services/messageCampaignService';
 
 dotenv.config();
-
 const app = express();
 const httpServer = createServer(app);
+
+// ✅ CORRIGIDO: Socket.IO CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST']
+    origin: [
+      'http://localhost:3000',
+      'https://whatskovi.vercel.app',
+      /\.vercel\.app$/ // Aceita qualquer *.vercel.app
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000'
-  })
-);
+// ✅ JÁ ESTÁ CORRETO: Express CORS
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://whatskovi.vercel.app', 
+    /\.vercel\.app$/ // Aceita todos os subdomínios .vercel.app
+  ],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
-
 app.use('/survey', satisfactionPublicRoutes);
 app.use('/api', routes);
 
