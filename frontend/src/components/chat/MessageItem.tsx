@@ -3,14 +3,14 @@ import { format } from 'date-fns';
 import {
   Check,
   CheckCheck,
-  CornerUpRight,
   Mail,
   MoreVertical,
   Paperclip,
   Pencil,
   Smartphone,
   StickyNote,
-  Trash2
+  Trash2,
+  ThumbsUp
 } from 'lucide-react';
 
 import { resolveAssetUrl } from '@/utils/media';
@@ -126,7 +126,6 @@ export function MessageItem({
   currentUserId,
   isFromAgent,
   reactionPalette,
-  onQuote,
   onToggleReaction,
   onToggleMenu,
   onEdit,
@@ -141,8 +140,19 @@ export function MessageItem({
   const userReactions = new Set(
     message.reactions.filter((reaction) => reaction.userId === currentUserId).map((reaction) => reaction.emoji)
   );
-
+  const primaryReactionEmoji = reactionPalette[0] ?? '👍';
+  const primaryReactionGroup = reactionGroups.find((group) => group.emoji === primaryReactionEmoji);
+  const primaryReactionFromOthers = primaryReactionGroup
+    ? primaryReactionGroup.reactions.filter((reaction) => reaction.userId !== currentUserId).length
+    : 0;
+  const agentHasReacted = userReactions.has(primaryReactionEmoji);
+  const shouldShowOutboundReaction = isFromAgent && primaryReactionFromOthers > 0;
   const isPrivateNote = Boolean(message.isPrivate);
+  const shouldShowInboundReactionButton = !isFromAgent && !isPrivateNote;
+
+  const handlePrimaryReaction = () => {
+    onToggleReaction(message, primaryReactionEmoji);
+  };
   const isDarkTheme = isPrivateNote || isFromAgent;
   const bubbleBackgroundClass = isPrivateNote
     ? 'text-white'
@@ -159,7 +169,7 @@ export function MessageItem({
     ? 'border-white/30 bg-white/10 text-white'
     : 'border-primary/10 bg-primary/5 text-primary';
 
-  const showMenuButton = (canEdit || canDelete) && Boolean(onToggleMenu);
+  const showMenuButton = isFromAgent && (canEdit || canDelete) && Boolean(onToggleMenu);
   const bubbleHighlightClass = isHighlighted
     ? isDarkTheme
       ? 'ring-2 ring-white/70 shadow-lg'
@@ -189,38 +199,27 @@ export function MessageItem({
 
   return (
     <div className={`flex ${isFromAgent ? 'justify-end' : 'justify-start'}`} data-message-id={message.id}>
-      <div
-        className={`group relative max-w-[70%] rounded-2xl px-4 py-3 shadow-sm transition ${bubbleBackgroundClass} ${bubbleBorderClass} ${bubbleHighlightClass}`}
-        style={isPrivateNote ? { backgroundColor: '#f58a32' } : undefined}
-      >
-        <div className="mb-1 flex items-start justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide">
-          <span className={isDarkTheme ? 'text-white/80' : 'text-gray-500'}>{author}</span>
-          <div className="flex items-center gap-1">
+      <div className="relative flex flex-col max-w-[70%]">
+        <div
+          className={`group relative rounded-2xl px-4 py-3 shadow-sm transition ${bubbleBackgroundClass} ${bubbleBorderClass} ${bubbleHighlightClass}`}
+          style={isPrivateNote ? { backgroundColor: '#f58a32' } : undefined}
+        >
+        <div className="mb-1 flex items-start justify-between gap-2">
+          <span className={`text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap ${isDarkTheme ? 'text-white/80' : 'text-gray-500'}`}>{author}</span>
+          {showMenuButton && (
             <button
               type="button"
-              onClick={() => onQuote(message)}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
-                isDarkTheme ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleMenu?.(message.id);
+              }}
+              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] transition ${
+                isDarkTheme ? 'text-white/80 hover:bg-white/20' : 'text-gray-500 hover:bg-gray-100'
               }`}
             >
-              <CornerUpRight size={12} />
-              Responder
+              <MoreVertical size={14} />
             </button>
-            {showMenuButton && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleMenu?.(message.id);
-                }}
-                className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] transition ${
-                  isDarkTheme ? 'text-white/80 hover:bg-white/20' : 'text-gray-500 hover:bg-gray-100'
-                }`}
-              >
-                <MoreVertical size={14} />
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {isPrivateNote && (
@@ -261,65 +260,27 @@ export function MessageItem({
           </button>
         )}
 
-        {message.body && <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.body}</p>}
+        {message.body && <p className="break-words text-sm leading-relaxed">{message.body}</p>}
 
         {renderMessageMedia(message, isDarkTheme)}
 
         <div className="mt-2 flex items-center justify-end gap-2 text-[10px] opacity-75">
+          {shouldShowOutboundReaction && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                isDarkTheme ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+              }`}
+            >
+              <ThumbsUp size={12} />
+              {primaryReactionFromOthers}
+            </span>
+          )}
           {message.editedAt && <span>Editada</span>}
           <span>{format(new Date(message.createdAt), 'HH:mm')}</span>
           {isFromAgent && (
             <span>{message.status === 'READ' ? <CheckCheck size={14} /> : <Check size={14} />}</span>
           )}
         </div>
-
-        {reactionGroups.length > 0 && (
-          <div className={`mt-2 flex flex-wrap gap-1 ${isFromAgent ? 'justify-end' : 'justify-start'}`}>
-            {reactionGroups.map((group) => {
-              const userReacted = userReactions.has(group.emoji);
-              return (
-                <button
-                  key={group.emoji}
-                  type="button"
-                  onClick={() => onToggleReaction(message, group.emoji)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
-                    userReacted
-                      ? isDarkTheme
-                        ? 'border-white bg-white/20 text-white'
-                        : 'border-primary bg-primary/10 text-primary'
-                      : isDarkTheme
-                      ? 'border-white/40 bg-white/10 text-white/80 hover:bg-white/20'
-                      : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <span>{group.emoji}</span>
-                  <span>{group.count}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {reactionPalette.length > 0 && (
-          <div
-            className={`mt-2 flex flex-wrap gap-1 ${
-              isFromAgent ? 'justify-end' : 'justify-start'
-            } opacity-0 transition group-hover:opacity-100`}
-          >
-            {reactionPalette.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onToggleReaction(message, emoji)}
-                className={`rounded-full px-2 py-0.5 text-[11px] transition ${
-                  isDarkTheme ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        )}
 
         {showMenuButton && isMenuOpen && (
           <div
@@ -354,8 +315,20 @@ export function MessageItem({
             )}
           </div>
         )}
+        </div>
+        {shouldShowInboundReactionButton && (
+          <button
+            type="button"
+            aria-label="Curtir mensagem"
+            onClick={handlePrimaryReaction}
+            className={`mt-1 flex h-6 w-6 items-center justify-center rounded-full border transition ${
+              agentHasReacted ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-primary'
+            }`}
+          >
+            <ThumbsUp size={12} />
+          </button>
+        )}
       </div>
     </div>
   );
 }
-

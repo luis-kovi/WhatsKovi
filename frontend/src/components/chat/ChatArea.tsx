@@ -12,7 +12,6 @@ import {
   Smile,
   MessageSquare,
   Tag as TagIcon,
-  StickyNote,
   Mic,
   ChevronDown,
   Plus,
@@ -20,6 +19,7 @@ import {
   Download,
   Loader2,
   Sparkles,
+  Zap,
   X
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
@@ -257,11 +257,9 @@ export default function ChatArea() {
   }));
 
   const {
-    quickReplies,
     fetchQuickReplies: loadQuickReplies,
     fetchVariables: loadQuickReplyVariables
   } = useQuickReplyStore((state) => ({
-    quickReplies: state.quickReplies,
     fetchQuickReplies: state.fetchQuickReplies,
     fetchVariables: state.fetchVariables
   }));
@@ -287,7 +285,7 @@ export default function ChatArea() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [messageChannel, setMessageChannel] = useState<MessageChannel>('WHATSAPP');
   const [isQuickReplyModalOpen, setQuickReplyModalOpen] = useState(false);
-  const [showTagManager, setShowTagManager] = useState(false);
+  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -296,6 +294,7 @@ export default function ChatArea() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isRegeneratingSuggestions, setIsRegeneratingSuggestions] = useState(false);
+  const [isAiSuggestionsVisible, setIsAiSuggestionsVisible] = useState(false);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [creatingFollowUpTicket, setCreatingFollowUpTicket] = useState(false);
   const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
@@ -351,6 +350,8 @@ export default function ChatArea() {
 
     return options;
   }, [contactEmail, isPrivate, multichannelCapabilities]);
+
+  const isTicketClosed = selectedTicket?.status === 'CLOSED';
 
   useEffect(() => {
     if (isPrivate) {
@@ -425,6 +426,8 @@ export default function ChatArea() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
+  const tagButtonRef = useRef<HTMLButtonElement | null>(null);
+  const tagMenuRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -524,6 +527,41 @@ export default function ChatArea() {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenuMessageId]);
+
+  useEffect(() => {
+    if (!isTagMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        tagMenuRef.current &&
+        !tagMenuRef.current.contains(target) &&
+        tagButtonRef.current &&
+        !tagButtonRef.current.contains(target)
+      ) {
+        setIsTagMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isTagMenuOpen]);
+  useEffect(() => {
+    setIsAiSuggestionsVisible(false);
+  }, [selectedTicket?.id]);
+
+  useEffect(() => {
+    if (!latestCustomerMessage) {
+      setIsAiSuggestionsVisible(false);
+    }
+  }, [latestCustomerMessage]);
+
+  useEffect(() => {
+    if (selectedTicket?.status === 'CLOSED') {
+      setIsAiSuggestionsVisible(false);
+    }
+  }, [selectedTicket?.status]);
+
 
   useEffect(() => {
     return () => {
@@ -633,6 +671,10 @@ export default function ChatArea() {
   );
 
   const handleToggleRecording = async () => {
+    if (isTicketClosed) {
+      toast.error('Atendimento encerrado.');
+      return;
+    }
     if (!isPrivate && messageChannel !== 'WHATSAPP') {
       toast.error('Gravacao disponivel apenas para WhatsApp.');
       return;
@@ -726,20 +768,19 @@ export default function ChatArea() {
     }
   };
 
-  const handleSendMessage = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selectedTicket) return;
+  const sendCurrentMessage = useCallback(async () => {
+    if (!selectedTicket || isSending) return;
     const trimmed = newMessage.trim();
     if (!trimmed) return;
 
     setIsSending(true);
     try {
-        await sendMessageAction({
-          body: trimmed,
-          isPrivate,
-          quotedMsgId: quotedMessage?.id ?? null,
-          channel: !isPrivate ? messageChannel : undefined
-        });
+      await sendMessageAction({
+        body: trimmed,
+        isPrivate,
+        quotedMsgId: quotedMessage?.id ?? null,
+        channel: !isPrivate ? messageChannel : undefined
+      });
       setNewMessage('');
       setShowEmojiPicker(false);
       setQuickReplyModalOpen(false);
@@ -754,9 +795,17 @@ export default function ChatArea() {
     } finally {
       setIsSending(false);
     }
+  }, [selectedTicket, isSending, newMessage, sendMessageAction, isPrivate, quotedMessage, messageChannel]);
+
+  const handleSendMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isTicketClosed) return;
+    event.preventDefault();
+    await sendCurrentMessage();
   };
 
   const handleFileButtonClick = () => {
+    if (isTicketClosed) return;
     if (!selectedTicket) return;
     if (!isPrivate && messageChannel !== 'WHATSAPP') {
       toast.error('Envio de arquivos disponivel apenas para WhatsApp.');
@@ -768,6 +817,18 @@ export default function ChatArea() {
   };
 
   const handleTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      event.preventDefault();
+      void sendCurrentMessage();
+      return;
+    }
+
     if (
       event.key === '/' &&
       !event.shiftKey &&
@@ -900,6 +961,7 @@ export default function ChatArea() {
   };
 
   const handleApplySuggestion = (suggestion: string) => {
+    if (isTicketClosed) return;
     setNewMessage(suggestion);
     setIsPrivate(false);
     setQuickReplyModalOpen(false);
@@ -910,38 +972,48 @@ export default function ChatArea() {
   };
 
   const handleRegenerateAiSuggestions = async () => {
+    if (isTicketClosed) {
+      toast.error('Atendimento encerrado.');
+      return;
+    }
     if (!selectedTicket || !latestCustomerMessage) {
-      toast.error('Nenhuma mensagem do cliente disponível para sugestão.');
+      toast.error('Nenhuma mensagem do cliente disponivel para sugestao.');
       return;
     }
 
     setIsRegeneratingSuggestions(true);
     try {
       await regenerateSuggestions(latestCustomerMessage.id, selectedTicket.id);
-      toast.success('Sugestões atualizadas com IA.');
+      toast.success('Sugestoes atualizadas com IA.');
+      setIsAiSuggestionsVisible(true);
     } catch (error) {
-      console.error('Erro ao regenerar sugestões de IA:', error);
-      toast.error('Não foi possível atualizar as sugestões agora.');
+      console.error('Erro ao regenerar sugestoes de IA:', error);
+      toast.error('Nao foi possivel atualizar as sugestoes agora.');
     } finally {
       setIsRegeneratingSuggestions(false);
     }
   };
 
   const handleGenerateChatbotReply = async () => {
+    if (isTicketClosed) {
+      toast.error('Atendimento encerrado.');
+      return;
+    }
     if (!selectedTicket || !latestCustomerMessage?.body) {
-      toast.error('Nenhuma mensagem válida para gerar resposta automática.');
+      toast.error('Nenhuma mensagem valida para gerar resposta automatica.');
       return;
     }
 
     setIsGeneratingDraft(true);
     try {
       const result = await previewChatbotReply(selectedTicket.id, latestCustomerMessage.body);
+      setIsAiSuggestionsVisible(true);
       if (result) {
-        toast.success('Sugestão de resposta gerada com IA.');
+        toast.success('Sugestao de resposta gerada com IA.');
       }
     } catch (error) {
       console.error('Erro ao gerar resposta com IA:', error);
-      toast.error('Não foi possível gerar uma resposta automática.');
+      toast.error('Nao foi possivel gerar uma resposta automatica.');
     } finally {
       setIsGeneratingDraft(false);
     }
@@ -1158,23 +1230,56 @@ export default function ChatArea() {
                   </div>
                 )}
               </div>
+
+              <div className='relative'>
+                <button
+                  type='button'
+                  ref={tagButtonRef}
+                  onClick={() => setIsTagMenuOpen((prev) => !prev)}
+                  className='inline-flex items-center gap-1 rounded-lg border border-dashed border-primary px-2 py-1 text-[10px] font-semibold text-primary transition hover:bg-primary/10'
+                >
+                  <TagIcon size={11} />
+                  Tags
+                </button>
+
+                {isTagMenuOpen && (
+                  <div
+                    ref={tagMenuRef}
+                    className='absolute left-0 z-40 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-xl'
+                  >
+                    <p className='text-[10px] font-semibold uppercase text-gray-400'>Selecione tags</p>
+                    <div className='mt-2 flex flex-col gap-1'>
+                      {tags.length === 0 ? (
+                        <span className='text-[11px] text-gray-500'>Nenhuma tag cadastrada.</span>
+                      ) : (
+                        tags.map((tag) => {
+                          const active = activeTagIds.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              type='button'
+                              onClick={() => handleToggleTag(tag.id)}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition ${
+                                active
+                                  ? 'bg-primary text-white'
+                                  : 'border border-gray-200 text-gray-600 hover:bg-gray-100'
+                              }`}
+                            >
+                              <span className='h-2.5 w-2.5 rounded-full' style={{ backgroundColor: tag.color }} />
+                              #{tag.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         <div className='flex items-center gap-2'>
-          <button
-            onClick={() => setIsPrivate((prev) => !prev)}
-            className={`inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-              isPrivate
-                ? 'border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-100'
-                : 'border-gray-200 text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <StickyNote size={14} />
-            Nota interna
-          </button>
-
           <button
             onClick={handleExportConversation}
             className='inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100'
@@ -1323,53 +1428,18 @@ export default function ChatArea() {
       </div>
 
       <div className='border-t border-gray-200 bg-white px-5 py-4'>
-        <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
-          <div className='flex flex-wrap items-center gap-2'>
-            {selectedTicket.tags.map((relation) => (
-              <span
-                key={relation.id}
-                className='inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide'
-                style={{ backgroundColor: `${relation.tag.color}1A`, color: relation.tag.color }}
-              >
-                <TagIcon size={12} />
-                {relation.tag.name}
-              </span>
-            ))}
-          </div>
-          <button
-            onClick={() => setShowTagManager((prev) => !prev)}
-            className='inline-flex items-center gap-1 rounded-full border border-dashed border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10'
-          >
-            <TagIcon size={12} />
-            Gerenciar tags
-          </button>
+        <div className='mb-2 flex flex-wrap items-center gap-2'>
+          {selectedTicket.tags.map((relation) => (
+            <span
+              key={relation.id}
+              className='inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide'
+              style={{ backgroundColor: `${relation.tag.color}1A`, color: relation.tag.color }}
+            >
+              <TagIcon size={12} />
+              {relation.tag.name}
+            </span>
+          ))}
         </div>
-
-        {showTagManager && (
-          <div className='mb-3 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2'>
-            <p className='text-[11px] font-semibold uppercase text-gray-500'>Selecione tags para este atendimento</p>
-            <div className='mt-2 flex flex-wrap gap-2'>
-              {tags.length === 0 ? (
-                <span className='text-[11px] text-gray-500'>Nenhuma tag cadastrada.</span>
-              ) : (
-                tags.map((tag) => {
-                  const active = activeTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      onClick={() => handleToggleTag(tag.id)}
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                        active ? 'bg-primary text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      #{tag.name}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
         {!isPrivate && channelOptions.length > 1 && (
           <div className='mb-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-gray-500'>
             <span className='uppercase tracking-wide'>Enviar via</span>
@@ -1457,14 +1527,14 @@ export default function ChatArea() {
           </div>
         )}
 
-        {selectedTicket && latestCustomerMessage && (
+        {selectedTicket && latestCustomerMessage && isAiSuggestionsVisible && (
           <div className='mb-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3 shadow-sm'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
               <div>
-                <p className='text-[11px] font-semibold uppercase tracking-wide text-violet-600'>Sugestões com IA</p>
+                <p className='text-[11px] font-semibold uppercase tracking-wide text-violet-600'>Sugestoes com IA</p>
                 {customerMessagePreview ? (
                   <p className='text-[10px] text-violet-600/80'>
-                    Última mensagem analisada: “{customerMessagePreview}”
+                    Ultima mensagem analisada: &quot;{customerMessagePreview}&quot;
                   </p>
                 ) : null}
               </div>
@@ -1472,7 +1542,7 @@ export default function ChatArea() {
                 <button
                   type='button'
                   onClick={handleRegenerateAiSuggestions}
-                  disabled={isRegeneratingSuggestions || !latestCustomerMessage.body}
+                  disabled={isTicketClosed || isRegeneratingSuggestions || !latestCustomerMessage.body}
                   className='inline-flex items-center gap-1 rounded-lg border border-violet-300 px-3 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60'
                 >
                   {isRegeneratingSuggestions ? (
@@ -1481,15 +1551,6 @@ export default function ChatArea() {
                     <RotateCcw size={14} />
                   )}
                   Atualizar
-                </button>
-                <button
-                  type='button'
-                  onClick={handleGenerateChatbotReply}
-                  disabled={isGeneratingDraft || !latestCustomerMessage.body}
-                  className='inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-400'
-                >
-                  {isGeneratingDraft ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Sparkles size={14} />}
-                  Gerar resposta
                 </button>
               </div>
             </div>
@@ -1504,7 +1565,7 @@ export default function ChatArea() {
                     className='group h-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-left text-sm text-gray-700 transition hover:border-violet-400 hover:shadow-sm'
                   >
                     <span className='text-[11px] font-semibold uppercase tracking-wide text-violet-500'>
-                      Sugestão #{index + 1}
+                      Sugestao #{index + 1}
                     </span>
                     <span className='mt-1 block text-sm leading-relaxed text-gray-700'>{suggestion.text}</span>
                     {suggestion.reason && (
@@ -1515,18 +1576,19 @@ export default function ChatArea() {
               </div>
             ) : (
               <p className='mt-2 text-[11px] text-violet-700'>
-                Nenhuma sugestão disponível no momento. Gere uma nova sugestão para acelerar a resposta.
+                Nenhuma sugestao disponivel no momento. Gere uma nova sugestao para acelerar a resposta.
               </p>
             )}
 
-            {chatbotDraft && chatbotDraft.shouldReply && (
+            {isAiSuggestionsVisible && chatbotDraft && chatbotDraft.shouldReply && (
               <div className='mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <span className='font-semibold text-emerald-700'>Resposta sugerida pela IA</span>
                   <button
                     type='button'
                     onClick={handleUseChatbotDraft}
-                    className='inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-emerald-600'
+                    disabled={isTicketClosed}
+                    className='inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-emerald-300'
                   >
                     Usar resposta
                   </button>
@@ -1537,87 +1599,111 @@ export default function ChatArea() {
           </div>
         )}
 
-        <form onSubmit={handleSendMessage} className='flex items-end gap-3'>
-          <div className='relative flex items-center gap-2'>
-            <button
-              type='button'
-              ref={emojiButtonRef}
-              onClick={() => {
-                setShowEmojiPicker((prev) => !prev);
-                setQuickReplyModalOpen(false);
-              }}
-              className={`flex h-11 w-11 items-center justify-center rounded-lg border text-gray-500 transition ${
-                showEmojiPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              <Smile size={20} />
-            </button>
-            <button
-              type='button'
-              onClick={handleFileButtonClick}
-              disabled={uploadingFile}
-              className='flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
-            >
-              {uploadingFile ? <Loader2 className='h-4 w-4 animate-spin' /> : <Paperclip size={20} />}
-            </button>
-            <button
-              type='button'
-              onClick={handleToggleRecording}
-              disabled={uploadingFile}
-              className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
-                isRecording
-                  ? 'border-red-400 bg-red-50 text-red-500 hover:bg-red-100'
-                  : 'border-gray-200 text-gray-500 hover:bg-gray-100'
-              } disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              <Mic size={20} />
-            </button>
+        <form onSubmit={handleSendMessage} className='flex flex-col gap-3'>
+          <div className='flex items-stretch gap-3'>
+            <div className='flex flex-col gap-2'>
+              <div className='relative flex flex-col gap-2'>
+                <button
+                  type='button'
+                  ref={emojiButtonRef}
+                  onClick={() => {
+                    setShowEmojiPicker((prev) => !prev);
+                    setQuickReplyModalOpen(false);
+                  }}
+                  disabled={isTicketClosed}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg border text-gray-500 transition ${
+                    showEmojiPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:bg-gray-100'
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  <Smile size={18} />
+                </button>
+                <button
+                  type='button'
+                  onClick={handleFileButtonClick}
+                  disabled={isTicketClosed || uploadingFile}
+                  className='flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
+                >
+                  {uploadingFile ? <Loader2 className='h-4 w-4 animate-spin' /> : <Paperclip size={18} />}
+                </button>
+                <button
+                  type='button'
+                  onClick={handleToggleRecording}
+                  disabled={isTicketClosed || uploadingFile}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
+                    isRecording
+                      ? 'border-red-400 bg-red-50 text-red-500 hover:bg-red-100'
+                      : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  <Mic size={18} />
+                </button>
 
-            {showEmojiPicker && (
-              <div
-                ref={emojiPickerRef}
-                className='absolute bottom-14 left-0 z-50 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl'
-              >
-                <EmojiPicker data={data} onEmojiSelect={handleEmojiSelect} locale='pt' theme='light' />
+                {showEmojiPicker && (
+                  <div
+                    ref={emojiPickerRef}
+                    className='absolute bottom-14 left-0 z-50 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl'
+                  >
+                    <EmojiPicker data={data} onEmojiSelect={handleEmojiSelect} locale='pt' theme='light' />
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
+            <div className='flex flex-1 gap-3'>
+              <textarea
+                ref={textareaRef}
+                value={newMessage}
+                onChange={(event) => setNewMessage(event.target.value)}
+                onKeyDown={(event) => handleTextareaKeyDown(event)}
+                rows={isPrivate ? 4 : 3}
+                placeholder={isTicketClosed ? 'Atendimento encerrado' : isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'}
+                disabled={isTicketClosed}
+                className='h-full min-h-[128px] flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:bg-gray-100'
+              />
+              <div className='flex w-[120px] flex-col gap-2'>
+                <button
+                  type='button'
+                  onClick={async () => {
+                    if (isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body) return;
+                    await handleGenerateChatbotReply();
+                  }}
+                  disabled={isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body}
+                  className='flex h-10 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white shadow transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400'
+                >
+                  {isGeneratingDraft ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles size={14} />}
+                  Gerar
+                </button>
+                <button
+                  type='button'
+                  onClick={() => {
+                    if (isTicketClosed) return;
+                    setQuickReplyModalOpen(true);
+                    setShowEmojiPicker(false);
+                  }}
+                  disabled={isTicketClosed}
+                  className='flex h-10 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white shadow transition hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-amber-300'
+                >
+                  <Zap className='h-4 w-4' />
+                  Respostas
+                </button>
+                <button
+                  type='submit'
+                  disabled={isTicketClosed || isSending || !newMessage.trim()}
+                  className='flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/40'
+                >
+                  {isSending ? (
+                    <Loader2 className='h-4 w-4 animate-spin' />
+                  ) : (
+                    <>
+                      <Send className='h-4 w-4' />
+                      Enviar
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className='relative flex-1'>
-            <textarea
-              ref={textareaRef}
-              value={newMessage}
-              onChange={(event) => setNewMessage(event.target.value)}
-              onKeyDown={(event) => handleTextareaKeyDown(event)}
-              rows={isPrivate ? 4 : 3}
-              placeholder={isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'}
-              className='w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30'
-            />
-            <button
-              type='button'
-              onClick={() => {
-                setQuickReplyModalOpen(true);
-                setShowEmojiPicker(false);
-              }}
-              className='absolute right-3 top-3 inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-100'
-            >
-              Respostas
-              {quickReplies.length > 0 && (
-                <span className='rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary'>
-                  {quickReplies.length}
-                </span>
-              )}
-              <ChevronDown size={12} />
-            </button>
-          </div>
-
-          <button
-            type='submit'
-            disabled={isSending || !newMessage.trim()}
-            className='flex h-11 w-14 items-center justify-center rounded-xl bg-primary text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-gray-300'
-          >
-            {isSending ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send size={18} />}
-          </button>
         </form>
 
         <input ref={fileInputRef} type='file' className='hidden' onChange={handleFileUpload} />
@@ -1666,23 +1752,3 @@ export default function ChatArea() {
     </div>
 );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

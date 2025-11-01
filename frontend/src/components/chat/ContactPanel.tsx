@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { StickyNote, Plus, X, Clock3, Phone, User, Tags, ChevronRight, Lock, Unlock } from 'lucide-react';
+import { StickyNote, Plus, X, Clock3, Phone, Tags, ChevronRight, Lock, Unlock } from 'lucide-react';
 
 import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote, ContactTicketSummary } from '@/store/contactStore';
-import { useMessages } from '@/hooks/useMessages';
 import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
 import { useScheduledMessageStore } from '@/store/scheduledMessageStore';
 
@@ -20,6 +19,38 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
   timeStyle: 'short'
 });
+
+const PANEL_CARD_CLASS =
+  'flex h-[150px] flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm';
+const PANEL_SCROLL_WRAPPER = 'mt-2 flex-1 overflow-hidden';
+const PANEL_SCROLL_AREA = 'h-full space-y-1.5 overflow-y-auto pr-1';
+
+const SCHEDULE_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Ativa',
+  PAUSED: 'Pausada',
+  COMPLETED: 'Concluida',
+  CANCELLED: 'Cancelada'
+};
+
+const SCHEDULE_STATUS_STYLES: Record<string, string> = {
+  ACTIVE: 'bg-emerald-100 text-emerald-600',
+  PAUSED: 'bg-amber-100 text-amber-600',
+  COMPLETED: 'bg-slate-200 text-slate-600',
+  CANCELLED: 'bg-rose-100 text-rose-600'
+};
+
+const RECURRENCE_LABELS: Record<string, string> = {
+  NONE: 'Unico envio',
+  DAILY: 'Diaria',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal'
+};
+
+const TICKET_STATUS_STYLES: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-600',
+  OPEN: 'bg-sky-100 text-sky-600',
+  CLOSED: 'bg-slate-200 text-slate-600'
+};
 
 const formatDateTime = (isoDate: string) => {
   try {
@@ -363,15 +394,25 @@ export default function ContactPanel() {
     selectedTicket: state.selectedTicket,
     selectTicket: state.selectTicket
   }));
-  const { selectedContact, loadContact, updateContact, loading, clearSelected } = useContactStore((state) => ({
+  const {
+    selectedContact,
+    loadContact,
+    updateContact,
+    loading,
+    clearSelected,
+    notes,
+    fetchContactNotes,
+    createNote: createContactNote
+  } = useContactStore((state) => ({
     selectedContact: state.selectedContact,
     loadContact: state.loadContact,
     updateContact: state.updateContact,
     loading: state.loading,
-    clearSelected: state.clearSelected
+    clearSelected: state.clearSelected,
+    notes: state.notes,
+    fetchContactNotes: state.fetchContactNotes,
+    createNote: state.createNote
   }));
-
-  const { sendMessage } = useMessages({ ticketId: selectedTicket?.id, autoLoad: false });
 
   const { itemsByTicket: scheduledByTicket, fetchScheduledMessages } = useScheduledMessageStore((state) => ({
     itemsByTicket: state.itemsByTicket,
@@ -387,19 +428,19 @@ export default function ContactPanel() {
 
   useEffect(() => {
     if (selectedTicket) {
-      loadContact(selectedTicket.contact.id);
+      const contactId = selectedTicket.contact.id;
+      loadContact(contactId);
+      fetchContactNotes(contactId).catch(() => undefined);
       fetchScheduledMessages(selectedTicket.id).catch(() => undefined);
       return;
     }
     clearSelected();
-  }, [selectedTicket, loadContact, clearSelected, fetchScheduledMessages]);
+  }, [selectedTicket, loadContact, fetchContactNotes, clearSelected, fetchScheduledMessages]);
 
-  const internalNotes = useMemo(
+  const sortedNotes = useMemo(
     () =>
-      [...(selectedContact?.internalNotes ?? [])].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    [selectedContact?.internalNotes]
+      [...notes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [notes]
   );
 
   const recentTickets = useMemo(() => {
@@ -414,8 +455,6 @@ export default function ContactPanel() {
     return scheduledByTicket[selectedTicket.id] ?? [];
   }, [scheduledByTicket, selectedTicket]);
 
-  const latestInternalNote = internalNotes[0] ?? null;
-
   const handleToggleBlock = async () => {
     if (!selectedContact) return;
     await updateContact(selectedContact.id, { isBlocked: !selectedContact.isBlocked });
@@ -425,17 +464,15 @@ export default function ContactPanel() {
   };
 
   const handleCreateNote = async (content: string) => {
-    if (!selectedTicket || !selectedContact) return;
+    if (!selectedContact) return;
+    const trimmed = content.trim();
+    if (!trimmed) return;
     try {
       setSavingNote(true);
-      await sendMessage({
-        body: content,
-        isPrivate: true,
-        type: 'NOTE'
-      });
+      await createContactNote(selectedContact.id, trimmed);
+      await loadContact(selectedContact.id);
       toast.success('Nota interna registrada.');
       setCreateModalOpen(false);
-      await loadContact(selectedContact.id);
     } catch (error) {
       console.error('Erro ao registrar nota interna:', error);
       toast.error('Nao foi possivel registrar a nota. Tente novamente.');
@@ -461,12 +498,6 @@ export default function ContactPanel() {
 
   const contactName = selectedTicket.contact.name;
   const contactPhone = selectedTicket.contact.phoneNumber;
-
-  const displayedContactTags = selectedContact?.tags.slice(0, 3) ?? [];
-  const remainingContactTags = selectedContact && selectedContact.tags.length > 3
-    ? selectedContact.tags.length - displayedContactTags.length
-    : 0;
-
   return (
     <>
       <aside className="hidden w-96 flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex">
@@ -480,33 +511,16 @@ export default function ContactPanel() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <section className="h-[190px] rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-col gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{contactName}</p>
-                    <div className="mt-1 flex flex-col gap-1 text-[11px] text-gray-500">
-                      <span className="inline-flex items-center gap-1">
-                        <Phone className="h-3.5 w-3.5 text-primary" />
-                        {contactPhone}
-                      </span>
-                      {selectedContact.email && <span className="break-all">{selectedContact.email}</span>}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase text-gray-500">Status do contato</span>
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold ${
-                          selectedContact.isBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'
-                        }`}
-                      >
-                        {selectedContact.isBlocked ? 'Bloqueado' : 'Ativo'}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-[11px] text-gray-500">
-                      Ticket atual: {STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status}
-                    </p>
+            <section className={PANEL_CARD_CLASS}>
+              <header className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{contactName}</p>
+                  <div className="mt-1 space-y-1 text-[11px] text-gray-500">
+                    <span className="inline-flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5 text-primary" />
+                      {contactPhone}
+                    </span>
+                    {selectedContact.email && <span className="block break-all">{selectedContact.email}</span>}
                   </div>
                 </div>
                 <button
@@ -522,137 +536,210 @@ export default function ContactPanel() {
                 >
                   {selectedContact.isBlocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                 </button>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                {displayedContactTags.length > 0 ? (
-                  <>
-                    {displayedContactTags.map((tag) => (
+              </header>
+              <div className={PANEL_SCROLL_WRAPPER}>
+                <div className={`${PANEL_SCROLL_AREA} text-[12px] text-gray-600`}>
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase text-gray-500">Status do contato</span>
                       <span
-                        key={tag.id}
-                        className='inline-flex items-center gap-1 rounded-full px-2 py-0.5'
-                        style={{ backgroundColor: `${tag.color}15`, color: tag.color }}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                          selectedContact.isBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'
+                        }`}
                       >
-                        <User className='h-3 w-3' />
-                        #{tag.name}
+                        {selectedContact.isBlocked ? 'Bloqueado' : 'Ativo'}
                       </span>
-                    ))}
-                    {remainingContactTags > 0 && (
-                      <span className='rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500'>
-                        +{remainingContactTags}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase text-gray-500">Status do ticket</span>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                          TICKET_STATUS_STYLES[selectedTicket.status] ?? 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status}
                       </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-[11px] text-gray-500">Nenhuma tag atribuida a este contato.</span>
-                )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
 
-            <section className="h-[170px] rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-              <div className="flex items-center justify-between">
+            <section className={PANEL_CARD_CLASS}>
+              <header className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
                   Tickets desse contato
-                  <span className='inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-gray-100 px-2 text-[11px] font-semibold text-gray-600'>
+                  <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-gray-100 px-2 text-[11px] font-semibold text-gray-600">
                     {recentTickets.length}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setTicketHistoryOpen(true)}
-                  className='inline-flex items-center gap-1 text-[11px] font-semibold text-primary transition hover:underline'
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary transition hover:underline"
                 >
-                  Ver historico completo
+                  Historico
                 </button>
-              </div>
-              <div className='mt-3 space-y-2 text-[11px] text-gray-600'>
-                {recentTickets.length === 0 ? (
-                  <p>Nenhum ticket registrado.</p>
-                ) : (
-                  recentTickets.slice(0, 2).map((ticket) => (
-                    <div key={ticket.id} className='rounded-lg border border-gray-100 bg-gray-50 px-3 py-2'>
-                      <div className='flex items-center justify-between'>
-                        <span className='text-sm font-semibold text-gray-800'>#{ticket.id.slice(0, 8)}</span>
-                        <span className='text-[10px] font-medium text-gray-500'>{formatDateTime(ticket.updatedAt)}</span>
-                      </div>
-                      <div className='mt-1 flex flex-wrap items-center gap-2'>
-                        <span className='inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-gray-500'>
-                          {STATUS_LABELS[ticket.status] ?? ticket.status}
-                        </span>
-                        {ticket.queue?.name && (
-                          <span className='inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-gray-500'>
-                            <Tags className='h-3 w-3' />
-                            {ticket.queue.name}
+              </header>
+              <div className={PANEL_SCROLL_WRAPPER}>
+                <div className={`${PANEL_SCROLL_AREA} text-[11px] text-gray-600`}>
+                  {recentTickets.length === 0 ? (
+                    <p>Nenhum ticket registrado.</p>
+                  ) : (
+                    recentTickets.map((ticket) => (
+                      <button
+                        key={ticket.id}
+                        type="button"
+                        onClick={() => handleOpenTicketFromHistory(ticket.id)}
+                        className="w-full rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-gray-800">#{ticket.id.slice(0, 8)}</span>
+                          <span className="text-[10px] font-medium text-gray-500">
+                            {formatDateTime(ticket.updatedAt)}
                           </span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-gray-500">
+                            {STATUS_LABELS[ticket.status] ?? ticket.status}
+                          </span>
+                          {ticket.queue?.name && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-gray-500">
+                              <Tags className="h-3 w-3" />
+                              {ticket.queue.name}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
             </section>
 
-            <section className='h-[200px] rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm'>
-              <div className='flex items-center justify-between'>
-                <span className='text-sm font-semibold text-gray-800'>Notas internas</span>
-                <div className='flex items-center gap-2'>
+            <section className={PANEL_CARD_CLASS}>
+              <header className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-gray-800">Notas internas</span>
+                <div className="flex items-center gap-2">
                   <button
-                    type='button'
+                    type="button"
                     onClick={() => setNotesHistoryOpen(true)}
-                    className='inline-flex items-center gap-1 text-[11px] font-semibold text-primary transition hover:underline'
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary transition hover:underline"
                   >
-                    Ver historico completo
+                    Historico
                   </button>
                   <button
-                    type='button'
+                    type="button"
                     onClick={() => setCreateModalOpen(true)}
-                    className='inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-primary/90'
+                    className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-primary/90"
                   >
-                    <Plus className='h-3 w-3' />
+                    <Plus className="h-3 w-3" />
                     Nova nota
                   </button>
                 </div>
-              </div>
-              {latestInternalNote ? (
-                <div className='mt-3 space-y-2'>
-                  <p className='text-[11px] text-gray-500'>Registrada em {formatDateTime(latestInternalNote.createdAt)}</p>
-                  <p className='line-clamp-3 text-sm text-gray-700'>{latestInternalNote.body}</p>
-                  <button
-                    type='button'
-                    onClick={() => setNoteDetail(latestInternalNote)}
-                    className='text-[11px] font-semibold text-primary transition hover:underline'
-                  >
-                    Ver detalhes
-                  </button>
+              </header>
+              <div className={PANEL_SCROLL_WRAPPER}>
+                <div className={`${PANEL_SCROLL_AREA} text-[12px] text-gray-700`}>
+                  {sortedNotes.length === 0 ? (
+                    <p className="text-[11px] text-gray-500">Sem notas internas.</p>
+                  ) : (
+                    sortedNotes.map((note) => (
+                      <article
+                        key={note.id}
+                        className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5"
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-medium text-gray-500">
+                          <span>{formatDateTime(note.createdAt)}</span>
+                          {note.user?.name && <span className="truncate">por {note.user.name}</span>}
+                        </div>
+                          <p className="mt-1.5 line-clamp-3 text-[13px] text-gray-700">{note.body}</p>
+                        <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                          <div className="flex items-center gap-2">
+                            {note.ticket?.id && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5">
+                                <Tags className="h-3 w-3" />
+                                #{note.ticket.id.slice(0, 6)}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setNoteDetail(note)}
+                            className="text-[11px] font-semibold text-primary transition hover:underline"
+                          >
+                            Ver detalhes
+                          </button>
+                        </div>
+                      </article>
+                    ))
+                  )}
                 </div>
-              ) : (
-                <p className='mt-3 text-[11px] text-gray-500'>Sem notas internas.</p>
-              )}
+              </div>
             </section>
 
-            <section className='h-[150px] rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm'>
-              <div className='flex items-center justify-between'>
-                <span className='text-sm font-semibold text-gray-800'>Mensagens agendadas</span>
+            <section className={PANEL_CARD_CLASS}>
+              <header className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-gray-800">Mensagens agendadas</span>
                 {scheduledMessages.length > 0 && (
-                  <span className='rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600'>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
                     {scheduledMessages.length}
                   </span>
                 )}
+              </header>
+              <div className={PANEL_SCROLL_WRAPPER}>
+                <div className={`${PANEL_SCROLL_AREA} text-[12px] text-gray-700`}>
+                  {scheduledMessages.length === 0 ? (
+                    <p className="text-[11px] text-gray-500">Nenhuma mensagem agendada.</p>
+                  ) : (
+                    scheduledMessages.map((schedule) => {
+                      const statusClass =
+                        SCHEDULE_STATUS_STYLES[schedule.status] ?? 'bg-gray-100 text-gray-600';
+                      const statusLabel = SCHEDULE_STATUS_LABELS[schedule.status] ?? schedule.status;
+                      const nextRun = schedule.nextRunAt ?? schedule.scheduledFor;
+                      const recurrenceLabel = RECURRENCE_LABELS[schedule.recurrence] ?? schedule.recurrence;
+                      return (
+                        <div
+                          key={schedule.id}
+                          className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-gray-700">
+                              {nextRun ? formatDateTime(nextRun) : '-'}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}
+                            >
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <p className="mt-1.5 line-clamp-2 text-[13px] text-gray-700">{schedule.body}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                            <span>{recurrenceLabel}</span>
+                            <span>{schedule.isPrivate ? 'Interna' : 'Visivel ao cliente'}</span>
+                            {schedule.user?.name && <span>por {schedule.user.name}</span>}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-              <div className='mt-3 flex flex-wrap items-center gap-2'>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
-                  type='button'
+                  type="button"
                   onClick={() => setScheduledModalOpen(true)}
-                  className='inline-flex items-center gap-1 rounded-full border border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10'
+                  className="inline-flex items-center gap-1 rounded-full border border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10"
                 >
-                  <Plus className='h-3 w-3' />
+                  <Plus className="h-3 w-3" />
                   Agendar mensagem
                 </button>
                 <button
-                  type='button'
+                  type="button"
                   onClick={() => setScheduledModalOpen(true)}
                   disabled={scheduledMessages.length === 0}
-                  className='inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Gerenciar agendadas
                 </button>
@@ -672,7 +759,7 @@ export default function ContactPanel() {
       />
       <NotesHistoryModal
         open={notesHistoryOpen}
-        notes={internalNotes}
+        notes={sortedNotes}
         onClose={() => setNotesHistoryOpen(false)}
         onSelect={(note) => {
           setNoteDetail(note);
