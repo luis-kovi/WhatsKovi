@@ -1309,7 +1309,7 @@ export default function ChatArea() {
           {selectedTicket.status === 'CLOSED' && (
             <button
               onClick={handleCreateFollowUpTicket}
-              disabled={creatingFollowUpTicket}
+d              disabled={creatingFollowUpTicket}
               className='inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60'
             >
               {creatingFollowUpTicket ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus size={14} />}

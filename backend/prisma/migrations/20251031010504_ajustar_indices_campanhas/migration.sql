@@ -26,10 +26,10 @@ CREATE TYPE "SmsProvider" AS ENUM ('TWILIO');
 ALTER TYPE "MessageStatus" ADD VALUE 'FAILED';
 
 -- DropIndex
-DROP INDEX "scheduled_message_logs_messageId_idx";
+DROP INDEX IF EXISTS "scheduled_message_logs_messageId_idx";
 
 -- DropIndex
-DROP INDEX "scheduled_messages_ticketId_idx";
+DROP INDEX IF EXISTS "scheduled_messages_ticketId_idx";
 
 -- AlterTable
 ALTER TABLE "messages" ADD COLUMN     "channel" "MessageChannel" NOT NULL DEFAULT 'WHATSAPP',
