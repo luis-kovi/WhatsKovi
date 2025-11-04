@@ -7,6 +7,7 @@ import {
   MoreVertical,
   Paperclip,
   Pencil,
+  Reply,
   Smartphone,
   StickyNote,
   Trash2,
@@ -126,6 +127,7 @@ export function MessageItem({
   currentUserId,
   isFromAgent,
   reactionPalette,
+  onQuote,
   onToggleReaction,
   onToggleMenu,
   onEdit,
@@ -316,18 +318,30 @@ export function MessageItem({
           </div>
         )}
         </div>
-        {shouldShowInboundReactionButton && (
-          <button
-            type="button"
-            aria-label="Curtir mensagem"
-            onClick={handlePrimaryReaction}
-            className={`mt-1 flex h-6 w-6 items-center justify-center rounded-full border transition ${
-              agentHasReacted ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-primary'
-            }`}
-          >
-            <ThumbsUp size={12} />
-          </button>
-        )}
+        <div className="mt-1 flex items-center gap-1">
+          {!isFromAgent && !isPrivateNote && (
+            <button
+              type="button"
+              aria-label="Responder mensagem"
+              onClick={() => onQuote(message)}
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition hover:bg-gray-50 hover:text-primary"
+            >
+              <Reply size={12} />
+            </button>
+          )}
+          {shouldShowInboundReactionButton && (
+            <button
+              type="button"
+              aria-label="Curtir mensagem"
+              onClick={handlePrimaryReaction}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                agentHasReacted ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-primary'
+              }`}
+            >
+              <ThumbsUp size={12} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

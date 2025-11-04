@@ -1,9 +1,11 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useTicketStore } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
+import { useAvatar } from '@/hooks/useAvatar';
 import api from '@/services/api';
 import { Search, Filter, MessageSquare, RefreshCw, Plus, X, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -83,6 +85,112 @@ const getStatusLabel = (status: string) => {
       return status;
   }
 };
+
+type TicketItemProps = {
+  ticket: {
+    id: string;
+    status: string;
+    priority: string;
+    lastMessageAt: string;
+    unreadMessages: number;
+    contact: {
+      name: string;
+      phoneNumber: string;
+      avatar?: string | null;
+    };
+    queue?: {
+      name: string;
+      color: string;
+    } | null;
+    tags: Array<{
+      id: string;
+      tag: {
+        name: string;
+        color: string;
+      };
+    }>;
+  };
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+};
+
+function TicketItem({ ticket, isSelected, onSelect }: TicketItemProps) {
+  const avatar = useAvatar({
+    name: ticket.contact.name,
+    avatar: ticket.contact.avatar,
+    identifier: ticket.contact.phoneNumber
+  });
+
+  return (
+    <button
+      onClick={() => onSelect(ticket.id)}
+      className={`flex w-full border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 ${
+        isSelected ? 'bg-primary/5' : 'bg-white'
+      }`}
+    >
+      <div className="relative mr-3 h-12 w-12 flex-shrink-0 overflow-hidden rounded-full">
+        {avatar.hasImage && avatar.src ? (
+          <Image
+            src={avatar.src}
+            alt={ticket.contact.name}
+            fill
+            className="object-cover"
+            unoptimized
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center text-sm font-semibold text-primary"
+            style={{ backgroundColor: avatar.backgroundColor }}
+          >
+            {avatar.initials || ticket.contact.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="truncate text-sm font-semibold text-gray-800">{ticket.contact.name}</p>
+          <span className="text-[10px] uppercase text-gray-400">
+            {formatDistanceToNow(new Date(ticket.lastMessageAt), { addSuffix: true, locale: ptBR })}
+          </span>
+        </div>
+
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${getStatusColor(ticket.status)}`} />
+          <span className="text-[11px] font-semibold text-gray-600">{getStatusLabel(ticket.status)}</span>
+          <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-500">
+            {ticket.priority}
+          </span>
+          {ticket.queue && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide"
+              style={{ backgroundColor: `${ticket.queue.color}22`, color: ticket.queue.color }}
+            >
+              {ticket.queue.name}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1">
+          {ticket.tags.map((relation) => (
+            <span
+              key={relation.id}
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+              style={{ backgroundColor: `${relation.tag.color}22`, color: relation.tag.color }}
+            >
+              #{relation.tag.name}
+            </span>
+          ))}
+        </div>
+
+        {ticket.unreadMessages > 0 && (
+          <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-white">
+            {ticket.unreadMessages} novas mensagens
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
 
 export default function TicketList() {
   const {
@@ -572,59 +680,12 @@ export default function TicketList() {
             </div>
           ) : (
             tickets.map((ticket) => (
-              <button
+              <TicketItem
                 key={ticket.id}
-                onClick={() => selectTicket(ticket.id)}
-                className={`flex w-full border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 ${
-                  selectedTicket?.id === ticket.id ? 'bg-primary/5' : 'bg-white'
-                }`}
-              >
-                <div className="mr-3 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-600">
-                  {ticket.contact.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="truncate text-sm font-semibold text-gray-800">{ticket.contact.name}</p>
-                    <span className="text-[10px] uppercase text-gray-400">
-                      {formatDistanceToNow(new Date(ticket.lastMessageAt), { addSuffix: true, locale: ptBR })}
-                    </span>
-                  </div>
-
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${getStatusColor(ticket.status)}`} />
-                    <span className="text-[11px] font-semibold text-gray-600">{getStatusLabel(ticket.status)}</span>
-                    <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-500">
-                      {ticket.priority}
-                    </span>
-                    {ticket.queue && (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide"
-                        style={{ backgroundColor: `${ticket.queue.color}22`, color: ticket.queue.color }}
-                      >
-                        {ticket.queue.name}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1">
-                    {ticket.tags.map((relation) => (
-                      <span
-                        key={relation.id}
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                        style={{ backgroundColor: `${relation.tag.color}22`, color: relation.tag.color }}
-                      >
-                        #{relation.tag.name}
-                      </span>
-                    ))}
-                  </div>
-
-                  {ticket.unreadMessages > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {ticket.unreadMessages} novas mensagens
-                    </div>
-                  )}
-                </div>
-              </button>
+                ticket={ticket}
+                isSelected={selectedTicket?.id === ticket.id}
+                onSelect={selectTicket}
+              />
             ))
           )}
         </div>

@@ -103,7 +103,22 @@ export const getTicket = async (req: AuthRequest, res: Response) => {
         ...ticketInclude,
         messages: {
           include: {
-            user: { select: { id: true, name: true, avatar: true } }
+            user: { select: { id: true, name: true, avatar: true } },
+            quotedMessage: {
+              select: {
+                id: true,
+                body: true,
+                type: true,
+                mediaUrl: true,
+                createdAt: true,
+                user: { select: { id: true, name: true, avatar: true } }
+              }
+            },
+            reactions: {
+              include: {
+                user: { select: { id: true, name: true, avatar: true } }
+              }
+            }
           },
           orderBy: { createdAt: 'asc' }
         }

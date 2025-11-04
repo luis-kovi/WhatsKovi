@@ -29,6 +29,20 @@ const ensureUploadsDir = () => {
   }
 };
 
+// Baixa uma URL para a pasta de uploads e retorna o caminho salvo
+const downloadUrlToUploads = async (url: string) => {
+  ensureUploadsDir();
+  const res = await fetch(url).catch(() => null as any);
+  if (!res || !res.ok) return null;
+  const contentType = res.headers.get('content-type');
+  const ext = contentType ? `.${(contentType.split('/')[1] || 'bin').split(';')[0]}` : '';
+  const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+  const filePath = path.join(uploadsDir, filename);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  fs.writeFileSync(filePath, buffer);
+  return { filename, url: `/uploads/${filename}`, absolutePath: filePath } as const;
+};
+
 const storeIncomingMedia = (data: string, mimetype?: string | null) => {
   ensureUploadsDir();
   const extension = mimetype ? `.${mimetype.split('/')[1] || 'bin'}` : '';
@@ -164,6 +178,20 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
       });
     }
 
+    // Sincroniza avatar do contato usando a foto de perfil do WhatsApp, quando disponivel
+    try {
+      const clientData = getClient(connectionId);
+      const profileUrl = await clientData?.client.getProfilePicUrl(msg.from);
+      if (profileUrl) {
+        const saved = await downloadUrlToUploads(profileUrl).catch(() => null);
+        if (saved && contact.avatar !== saved.url) {
+          await prisma.contact.update({ where: { id: contact.id }, data: { avatar: saved.url } });
+        }
+      }
+    } catch {
+      // ignorar erros ao recuperar avatar
+    }
+
     let ticket = await prisma.ticket.findFirst({
       where: {
         contactId: contact.id,
@@ -226,23 +254,28 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
       }
     }
 
+    const incomingType =
+      msg.type === 'chat'
+        ? 'TEXT'
+        : msg.type === 'image'
+        ? 'IMAGE'
+        : msg.type === 'video'
+        ? 'VIDEO'
+        : msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice'
+        ? 'AUDIO'
+        : String(msg.type || 'TEXT').toUpperCase();
+
     const prismaMessage = await prisma.message.create({
       data: {
         body: msg.body || (mediaUrl ? 'Arquivo recebido' : ''),
-        type:
-          msg.type === 'chat'
-            ? 'TEXT'
-            : msg.type === 'image'
-            ? 'IMAGE'
-            : msg.type === 'video'
-            ? 'VIDEO'
-            : msg.type === 'audio'
-            ? 'AUDIO'
-            : msg.type.toUpperCase(),
+        type: incomingType as any,
         mediaUrl,
         ticketId: ticket.id,
         channel: MessageChannel.WHATSAPP,
-        status: MessageStatus.RECEIVED
+        status: MessageStatus.RECEIVED,
+        deliveryMetadata: {
+          whatsappMessageId: msg.id?._serialized ?? null
+        } as any
       }
     });
 
@@ -267,6 +300,8 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
         include: ticketResponseInclude
       })) ?? ticket;
 
+    // Atualiza lista de tickets (inclui avatar sincronizado do contato)
+    io.emit('ticket:update', ticket);
     io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
     await notifyIncomingTicketMessage(ticket, prismaMessage.body ?? '', { actorId: null });
     emitMessageEvent(prismaMessage.id, 'INBOUND').catch((error) => {
@@ -341,7 +376,8 @@ export const sendWhatsAppMessage = async (
   phoneNumber: string,
   message: string,
   mediaUrl?: string | null,
-  mediaPath?: string
+  mediaPath?: string,
+  options?: { quotedWhatsAppMessageId?: string; mimeType?: string | null }
 ) => {
   try {
     const clientData = clients.get(connectionId);
@@ -352,19 +388,52 @@ export const sendWhatsAppMessage = async (
 
     const chatId = `${phoneNumber}@c.us`;
 
+    let sent: any;
     if (mediaPath) {
       const media = MessageMedia.fromFilePath(mediaPath);
-      await clientData.client.sendMessage(chatId, media, {
-        caption: message
-      });
+      if (options?.mimeType) {
+        media.mimetype = options.mimeType;
+      }
+      const extra: any = { caption: message };
+      if (options?.mimeType?.startsWith('audio/')) {
+        extra.sendAudioAsVoice = true;
+        media.mimetype = 'audio/ogg; codecs=opus';
+      }
+      if (options?.quotedWhatsAppMessageId) {
+        extra.quotedMessageId = options.quotedWhatsAppMessageId;
+      }
+      sent = await clientData.client.sendMessage(chatId, media, extra);
     } else {
-      await clientData.client.sendMessage(chatId, message);
+      const extra: any = {};
+      if (options?.quotedWhatsAppMessageId) {
+        extra.quotedMessageId = options.quotedWhatsAppMessageId;
+      }
+      sent = await clientData.client.sendMessage(chatId, message, extra);
     }
 
-    return true;
+    const waId: string | null = sent?.id?._serialized ?? null;
+    return waId;
   } catch (error) {
     console.error('Erro ao enviar mensagem:', error);
     throw error;
+  }
+};
+
+export const reactToWhatsAppMessage = async (
+  connectionId: string,
+  whatsappMessageId: string,
+  emoji: string
+) => {
+  try {
+    const clientData = clients.get(connectionId);
+    if (!clientData) throw new Error('Cliente WhatsApp nao encontrado');
+    const target = await (clientData.client as any).getMessageById(whatsappMessageId);
+    if (!target) throw new Error('Mensagem WhatsApp nao encontrada');
+    await target.react(emoji);
+    return true;
+  } catch (error) {
+    console.error('Erro ao reagir a mensagem no WhatsApp:', error);
+    return false;
   }
 };
 
