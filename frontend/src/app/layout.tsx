@@ -61,10 +61,13 @@ const themeScript = `(() => {
 export const metadata: Metadata = {
   title: 'WhatsKovi - Gestão de Atendimentos',
   description: 'Sistema de gestão de atendimentos via WhatsApp',
+  icons: {
+    icon: '/brand/favicon.png'
+  }
 }
 
 export default function RootLayout({
-  children,
+  children
 }: {
   children: React.ReactNode
 }) {

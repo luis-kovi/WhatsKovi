@@ -17,6 +17,29 @@ import { emitTicketCreatedEvent } from '../services/integrationService';
 import { triggerSurveyForTicket } from '../services/satisfactionSurveyService';
 import { runAutomations } from '../services/automationService';
 
+const parseListParam = (value: unknown): string[] => {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => parseListParam(entry));
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => parseListParam(entry));
+  }
+
+  return [];
+};
+
 export const listTickets = async (req: AuthRequest, res: Response) => {
   try {
     const { status, queueId, userId, priority, tags, search, sort, limit } = req.query;
@@ -25,7 +48,13 @@ export const listTickets = async (req: AuthRequest, res: Response) => {
 
     const where: any = {};
 
-    if (status) where.status = status;
+    const searchTerm = typeof search === 'string' ? search.trim() : undefined;
+    const statusList = parseListParam(status).map((value) => value.toUpperCase());
+    if (statusList.length > 0 && !searchTerm) {
+      const uniqueStatuses = Array.from(new Set(statusList));
+      where.status = uniqueStatuses.length === 1 ? uniqueStatuses[0] : { in: uniqueStatuses };
+    }
+
     if (queueId) where.queueId = queueId;
     if (priority) where.priority = priority;
 
@@ -36,12 +65,7 @@ export const listTickets = async (req: AuthRequest, res: Response) => {
     }
 
     if (tags) {
-      const tagIds = Array.isArray(tags)
-        ? tags
-        : String(tags)
-            .split(',')
-            .map((tagId) => tagId.trim())
-            .filter(Boolean);
+      const tagIds = parseListParam(tags);
 
       if (tagIds.length > 0) {
         where.tags = {
@@ -52,11 +76,11 @@ export const listTickets = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    if (search && typeof search === 'string') {
+    if (searchTerm) {
       where.OR = [
-        { contact: { name: { contains: search, mode: 'insensitive' } } },
-        { contact: { phoneNumber: { contains: search, mode: 'insensitive' } } },
-        { messages: { some: { body: { contains: search, mode: 'insensitive' } } } }
+        { contact: { name: { contains: searchTerm, mode: 'insensitive' } } },
+        { contact: { phoneNumber: { contains: searchTerm, mode: 'insensitive' } } },
+        { messages: { some: { body: { contains: searchTerm, mode: 'insensitive' } } } }
       ];
     }
 
@@ -406,10 +430,11 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
 export const updateTicketDetails = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { priority, queueId, tagIds } = req.body as {
+    const { priority, queueId, tagIds, carPlate } = req.body as {
       priority?: string;
       queueId?: string | null;
       tagIds?: string[];
+      carPlate?: string | null;
     };
 
     if (priority && !VALID_PRIORITIES.includes(priority)) {
@@ -421,8 +446,20 @@ export const updateTicketDetails = async (req: AuthRequest, res: Response) => {
     if (priority) data.priority = priority;
     if (queueId !== undefined) data.queueId = queueId;
 
+    if (carPlate !== undefined) {
+      if (carPlate === null || carPlate === '') {
+        data.carPlate = null;
+      } else if (typeof carPlate === 'string') {
+        const formattedPlate = carPlate.toUpperCase().trim();
+        if (!isValidCarPlate(formattedPlate)) {
+          return res.status(400).json({ error: 'Placa do carro invalida. Use o formato ABC1D23.' });
+        }
+        data.carPlate = formattedPlate;
+      }
+    }
+
     let tagsChanged = false;
-    const dataChanged = Object.keys(data).length > 0;
+    let dataChanged = Object.keys(data).length > 0;
 
     const ticket = await prisma.$transaction(async (tx) => {
       if (dataChanged) {
@@ -440,6 +477,13 @@ export const updateTicketDetails = async (req: AuthRequest, res: Response) => {
 
         const result = await replaceTicketTags(id, sanitizedTagIds, tx);
         tagsChanged = result.changed;
+      }
+
+      if (!dataChanged && !tagsChanged) {
+        return tx.ticket.findUnique({
+          where: { id },
+          include: ticketInclude
+        });
       }
 
       return tx.ticket.findUnique({
@@ -539,6 +583,3 @@ export const removeTicketTag = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Erro ao remover tag do ticket' });
   }
 };
-
-
-

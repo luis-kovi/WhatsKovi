@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import type { LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -60,18 +61,25 @@ export default function Sidebar() {
   const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
 
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center border-r border-gray-200 bg-white py-6 shadow-lg transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
+    <aside className="fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center border-r border-gray-200 bg-white py-6 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-col items-center gap-6">
-        <div className="group relative flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-xl font-bold text-white shadow-lg shadow-primary/40 transition-transform hover:scale-105">
-          WK
-          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+        <div className="group relative flex h-11 w-11 items-center justify-center">
+          <Image
+            src="/brand/icone.png"
+            alt="WhatsKovi"
+            width={44}
+            height={44}
+            className="h-11 w-11 rounded-xl object-contain"
+            priority
+          />
+          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
             WhatsKovi
             <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900 dark:border-r-slate-700" />
           </div>
         </div>
       </div>
 
-      <nav className="mt-10 flex flex-1 flex-col items-center gap-2">
+      <nav className="mt-10 flex flex-1 flex-col items-center gap-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -82,15 +90,15 @@ export default function Sidebar() {
             <button
               key={item.href}
               onClick={() => handleNavigate(item.href)}
-              className={`group relative flex h-12 w-12 items-center justify-center rounded-xl transition-all ${
+              className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-all ${
                 isActive
-                  ? 'bg-gradient-to-br from-primary to-secondary text-white shadow-lg shadow-primary/40 scale-105'
+                  ? 'bg-gradient-to-br from-primary to-secondary text-white scale-105'
                   : 'text-gray-600 hover:bg-gray-100 hover:scale-105 dark:text-slate-300 dark:hover:bg-slate-800'
               }`}
               aria-label={label}
             >
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-              <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+              <Icon size={18} strokeWidth={isActive ? 2.2 : 1.8} />
+              <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
                 {label}
                 <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900 dark:border-r-slate-700" />
               </div>
@@ -101,31 +109,31 @@ export default function Sidebar() {
 
       <div className="flex flex-col items-center gap-3">
         <div className="group relative">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-slate-800">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-slate-800">
             <NotificationBell />
           </div>
-          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 dark:bg-slate-700">
-            Notificações
+          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+            Notificacoes
             <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900 dark:border-r-slate-700" />
           </div>
         </div>
 
         <div className="group relative">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-slate-800">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-slate-800">
             <ThemeToggle />
           </div>
-          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
             Tema
             <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900 dark:border-r-slate-700" />
           </div>
         </div>
 
         <div className="group relative mt-2">
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-gray-200 to-gray-300 font-semibold text-gray-700 shadow-md transition-transform hover:scale-105 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200">
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-gray-200 to-gray-300 font-semibold text-gray-700 transition-transform hover:scale-105 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200">
             {(user?.name?.charAt(0)?.toUpperCase() ?? '?')}
             <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500 dark:border-slate-900" />
           </div>
-          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
             <div className="font-semibold">{user?.name}</div>
             <div className="text-xs text-gray-300">Online</div>
             <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900 dark:border-r-slate-700" />
@@ -134,11 +142,11 @@ export default function Sidebar() {
 
         <button
           onClick={handleLogout}
-          className="group relative mt-2 flex h-12 w-12 items-center justify-center rounded-xl text-red-600 transition-all hover:bg-red-50 hover:scale-105 dark:hover:bg-red-500/10"
+          className="group relative mt-2 flex h-11 w-11 items-center justify-center rounded-xl text-red-600 transition-all hover:bg-red-50 hover:scale-105 dark:hover:bg-red-500/10"
           aria-label={t('nav.logout')}
         >
-          <LogOut size={22} strokeWidth={2} />
-          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+          <LogOut size={18} strokeWidth={1.9} />
+          <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
             Sair
             <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900 dark:border-r-slate-700" />
           </div>

@@ -1,9 +1,12 @@
 import { create } from 'zustand';
+import toast from 'react-hot-toast';
 import api from '@/services/api';
 import type { AxiosProgressEvent } from 'axios';
 import { getSocket } from '@/services/socket';
 import { resolveAssetUrl } from '@/utils/media';
+import { normalizeCarPlate } from '@/utils/carPlate';
 import { AiChatbotReply, AiSuggestion, DemandForecastPayload, TicketAiInsights } from '@/types/ai';
+import { useNotificationStore } from './notificationStore';
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'NOTE';
 export type MessageStatus = 'PENDING' | 'SENT' | 'RECEIVED' | 'READ';
@@ -88,7 +91,7 @@ export interface Ticket {
 type TicketSort = 'recent' | 'unread' | 'priority';
 
 export interface TicketFilters {
-  status?: string;
+  status?: string[];
   queueId?: string;
   tagIds?: string[];
   search?: string;
@@ -136,7 +139,7 @@ interface TicketState {
   transferTicket: (ticketId: string, data: TransferPayload) => Promise<void>;
   updateTicketDetails: (
     ticketId: string,
-    data: { priority?: string; queueId?: string | null; tagIds?: string[] }
+    data: { priority?: string; queueId?: string | null; tagIds?: string[]; carPlate?: string | null }
   ) => Promise<void>;
   addTicketTags: (ticketId: string, tagIds: string[]) => Promise<void>;
   removeTicketTag: (ticketId: string, tagId: string) => Promise<void>;
@@ -227,12 +230,22 @@ type RawTicket = {
   messages?: RawMessage[];
 };
 
-const DEFAULT_FILTERS: TicketFilters = { sort: 'recent' };
+export const DEFAULT_STATUS_FILTERS = ['OPEN', 'PENDING'] as const;
 
-const serializeFilters = (filters: TicketFilters) => ({
-  ...filters,
-  tags: filters.tagIds && filters.tagIds.length > 0 ? filters.tagIds.join(',') : undefined
-});
+const DEFAULT_FILTERS: TicketFilters = { sort: 'recent', status: [...DEFAULT_STATUS_FILTERS] };
+
+const serializeFilters = (filters: TicketFilters) => {
+  const { tagIds, status, ...rest } = filters;
+  const searchTerm = typeof filters.search === 'string' ? filters.search.trim() : undefined;
+
+  return {
+    ...rest,
+    search: searchTerm || undefined,
+    status:
+      !searchTerm && status && status.length > 0 ? status.join(',') : undefined,
+    tags: tagIds && tagIds.length > 0 ? tagIds.join(',') : undefined
+  };
+};
 
 const normalizeUser = (user?: ReactionUser | null): ReactionUser | null => {
   if (!user) return null;
@@ -299,6 +312,114 @@ const reorderTicketsByLastMessage = (tickets: Ticket[]) =>
   [...tickets].sort(
     (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   );
+
+const hasBrowserNotificationSupport = () =>
+  typeof window !== 'undefined' && 'Notification' in window;
+
+const isWindowInactive = () => {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  const hidden = document.hidden;
+  const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+
+  return hidden || !hasFocus;
+};
+
+const messagePreviewByType: Record<MessageType, string> = {
+  TEXT: 'Nova mensagem',
+  IMAGE: 'Imagem recebida',
+  VIDEO: 'Vídeo recebido',
+  AUDIO: 'Áudio recebido',
+  DOCUMENT: 'Documento recebido',
+  NOTE: 'Nota interna'
+};
+
+const BRAND_LABEL = 'WhatsKovi';
+const BRAND_ICON_PATH = '/brand/favicon.png';
+const CONTACT_AVATAR_FALLBACK = '/brand/no_photo.png';
+
+const getMessagePreview = (message: TicketMessage) => {
+  if (message.body && message.body.trim().length > 0) {
+    return message.body.trim();
+  }
+
+  return messagePreviewByType[message.type] ?? 'Nova mensagem';
+};
+
+const truncatePreview = (value: string, limit = 160) =>
+  value.length > limit ? `${value.slice(0, limit - 3).trim()}...` : value;
+
+type BrowserNotificationInput = {
+  contactName: string;
+  preview: string;
+  avatar?: string | null;
+  tag?: string;
+  data?: Record<string, unknown>;
+};
+
+const showNotificationPopup = (payload: BrowserNotificationInput) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const avatarUrl = payload.avatar ?? CONTACT_AVATAR_FALLBACK;
+  const contactName = payload.contactName || 'Contato';
+  const preview = payload.preview ? truncatePreview(payload.preview) : '';
+
+  if (hasBrowserNotificationSupport() && Notification.permission === 'granted') {
+    try {
+      const options: NotificationOptions = {
+        body: preview || contactName,
+        icon: avatarUrl,
+        badge: BRAND_ICON_PATH,
+        tag: payload.tag,
+        data: {
+          ...(payload.data ?? {}),
+          contactName,
+          preview,
+          avatar: avatarUrl
+        }
+      };
+
+      const notification = new Notification(BRAND_LABEL, options);
+
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+
+      return;
+    } catch (error) {
+      console.error('[Tickets] browser notification failed', error);
+    }
+  }
+
+  const toastMessage = `${BRAND_LABEL} - ${contactName}${preview ? `: ${preview}` : ''}`;
+
+  if (toastMessage) {
+    toast(toastMessage, { icon: '🔔' });
+  }
+};
+
+const autoMarkTicketNotificationsAsRead = (ticketId: string) => {
+  const notificationState = useNotificationStore.getState();
+  const unread = notificationState.notifications.filter((item) => {
+    if (item.readAt || item.type !== 'TICKET_MESSAGE') {
+      return false;
+    }
+
+    const data = item.data as { ticketId?: unknown } | null | undefined;
+    return typeof data?.ticketId === 'string' && data.ticketId === ticketId;
+  });
+
+  if (unread.length === 0) {
+    return;
+  }
+
+  void notificationState.markAsRead(unread.map((item) => item.id));
+};
 
 const normalizeMessage = (message: RawMessage, ticketId: string): TicketMessage => {
   const quoted = message.quotedMessage
@@ -372,7 +493,10 @@ export const useTicketStore = create<TicketState>((set, get) => ({
   tickets: [],
   selectedTicket: null,
   loading: false,
-  filters: DEFAULT_FILTERS,
+  filters: {
+    ...DEFAULT_FILTERS,
+    status: [...DEFAULT_STATUS_FILTERS]
+  },
   messagesByTicket: {},
   messagesLoaded: {},
   quotedMessage: null,
@@ -433,7 +557,12 @@ export const useTicketStore = create<TicketState>((set, get) => ({
   },
 
   clearFilters: async () => {
-    set({ filters: DEFAULT_FILTERS });
+    set({
+      filters: {
+        ...DEFAULT_FILTERS,
+        status: [...DEFAULT_STATUS_FILTERS]
+      }
+    });
     await get().fetchTickets();
   },
 
@@ -611,7 +740,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
       const requestBody = {
         ...payload,
         phoneNumber: phoneDigits,
-        carPlate: payload.carPlate ?? undefined
+        carPlate: payload.carPlate ? normalizeCarPlate(payload.carPlate) : undefined
       };
 
       const response = await api.post<Ticket>('/tickets', requestBody);
@@ -1003,6 +1132,17 @@ export const useTicketStore = create<TicketState>((set, get) => ({
           ...state.tickets.filter((existing) => existing.id !== ticket.id)
         ])
       }));
+
+      if (ticket.status === 'PENDING') {
+        const contactName = ticket.contact?.name ?? 'Contato';
+        showNotificationPopup({
+          contactName,
+          preview: 'Ticket aguardando atendimento',
+          avatar: ticket.contact?.avatar ?? null,
+          tag: `pending-ticket:${ticket.id}`,
+          data: { ticketId: ticket.id }
+        });
+      }
     });
 
     socket.on('ticket:update', (payload: RawTicket) => {
@@ -1022,12 +1162,17 @@ export const useTicketStore = create<TicketState>((set, get) => ({
     socket.on('message:new', (payload: MessageSocketPayload) => {
       if (!payload.ticketId) return;
       const message = normalizeMessage(payload, payload.ticketId);
+      const isFromAgent = Boolean(payload.userId);
+      const snapshot = get();
+      const wasCurrentTicket = snapshot.selectedTicket?.id === payload.ticketId;
+      const shouldNotify =
+        !isFromAgent && !message.isPrivate && (isWindowInactive() || !wasCurrentTicket);
+      const previewText = truncatePreview(getMessagePreview(message));
 
       set((state) => {
         const currentMessages = state.messagesByTicket[payload.ticketId] ?? [];
         const nextMessages = sortByCreatedAtAsc(upsertMessage(currentMessages, message));
 
-        const isFromAgent = Boolean(payload.userId);
         const isCurrentTicket = state.selectedTicket?.id === payload.ticketId;
 
         const tickets = reorderTicketsByLastMessage(
@@ -1063,6 +1208,22 @@ export const useTicketStore = create<TicketState>((set, get) => ({
           messagesLoaded: { ...state.messagesLoaded, [payload.ticketId]: true }
         };
       });
+
+      if (shouldNotify) {
+        const updatedTicket = get().tickets.find((ticket) => ticket.id === payload.ticketId);
+        const contactName = updatedTicket?.contact?.name ?? 'Contato';
+        showNotificationPopup({
+          contactName,
+          preview: previewText,
+          avatar: updatedTicket?.contact?.avatar ?? null,
+          tag: `ticket:${payload.ticketId}`,
+          data: { ticketId: payload.ticketId }
+        });
+      }
+
+      if (isFromAgent) {
+        autoMarkTicketNotificationsAsRead(payload.ticketId);
+      }
     });
 
     socket.on('message:update', (payload: MessageSocketPayload) => {

@@ -3,11 +3,12 @@
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useTicketStore } from '@/store/ticketStore';
+import { useTicketStore, DEFAULT_STATUS_FILTERS } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useAvatar } from '@/hooks/useAvatar';
 import api from '@/services/api';
-import { Search, Filter, MessageSquare, RefreshCw, Plus, X, Loader2 } from 'lucide-react';
+import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
+import { Search, Filter, ArrowUpDown, MessageSquare, RefreshCw, Plus, X, Loader2, Check } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -30,8 +31,6 @@ const PRIORITY_OPTIONS = [
   { value: 'HIGH', label: 'Alta' },
   { value: 'URGENT', label: 'Urgente' }
 ];
-
-const CAR_PLATE_REGEX = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
 
 type ContactMatch = {
   id: string;
@@ -243,15 +242,25 @@ export default function TicketList() {
   const [manualError, setManualError] = useState<string | null>(null);
 
   const activeTagIds = useMemo(() => filters.tagIds || [], [filters.tagIds]);
+  const defaultStatuses = useMemo<string[]>(() => Array.from(DEFAULT_STATUS_FILTERS), []);
+  const defaultStatusSet = useMemo(() => new Set<string>(defaultStatuses), [defaultStatuses]);
+  const activeStatuses = filters.status ?? defaultStatuses;
+  const hasCustomStatus = useMemo(() => {
+    const current = filters.status ?? defaultStatuses;
+    if (current.length !== defaultStatuses.length) {
+      return true;
+    }
+    return current.some((status) => !defaultStatusSet.has(status));
+  }, [filters.status, defaultStatuses, defaultStatusSet]);
 
-  const filterCount = activeTagIds.length + (filters.status ? 1 : 0) + (filters.queueId ? 1 : 0);
-  const filterButtonActive = filterCount > 0;
+  const filterBadgeCount = activeTagIds.length + (filters.queueId ? 1 : 0) + (hasCustomStatus ? 1 : 0);
+  const filterButtonActive = filterBadgeCount > 0;
   const sortOption =
     filters.sort && filters.sort !== 'recent'
       ? SORT_OPTIONS.find((option) => option.value === filters.sort) ?? null
       : null;
   const hasActiveFilters =
-    Boolean(searchTerm.trim()) || filterCount > 0 || Boolean(filters.sort && filters.sort !== 'recent');
+    Boolean(searchTerm.trim()) || filterBadgeCount > 0 || Boolean(sortOption);
 
 
   useEffect(() => {
@@ -282,9 +291,22 @@ export default function TicketList() {
     await setFilter('search', searchTerm.trim() || undefined);
   };
 
-  const handleStatusClick = async (value: string) => {
-    const nextValue = filters.status === value ? undefined : value;
-    await setFilter('status', nextValue);
+  const handleStatusToggle = async (value: string) => {
+    const current = filters.status ?? [...DEFAULT_STATUS_FILTERS];
+    const exists = current.includes(value);
+    const next = exists ? current.filter((status) => status !== value) : [...current, value];
+    const ordered = STATUS_OPTIONS.filter((option) => next.includes(option.value)).map((option) => option.value);
+
+    const currentOrdered = STATUS_OPTIONS.filter((option) => current.includes(option.value)).map(
+      (option) => option.value
+    );
+    const hasChanged =
+      ordered.length !== currentOrdered.length ||
+      ordered.some((status, index) => status !== currentOrdered[index]);
+
+    if (!hasChanged) return;
+
+    await setFilter('status', ordered);
   };
 
   const toggleTag = async (tagId: string) => {
@@ -339,10 +361,10 @@ export default function TicketList() {
     );
   };
 
-  const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const sanitized = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
-    setManualCarPlate(sanitized);
-  };
+const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const sanitized = normalizeCarPlate(event.target.value);
+  setManualCarPlate(sanitized);
+};
 
   const handlePhoneBlur = async () => {
     const digits = manualPhone.replace(/\D/g, '');
@@ -391,8 +413,8 @@ export default function TicketList() {
       }
     }
 
-    const plate = manualCarPlate.toUpperCase();
-    if (!CAR_PLATE_REGEX.test(plate)) {
+    const normalizedPlate = normalizeCarPlate(manualCarPlate);
+    if (!isValidCarPlate(normalizedPlate)) {
       setManualError('Placa invalida. Use o formato ABC1D23.');
       return;
     }
@@ -405,7 +427,7 @@ export default function TicketList() {
         queueId: manualQueueId || undefined,
         priority: manualPriority,
         tagIds: manualTagIds,
-        carPlate: plate
+        carPlate: normalizedPlate
       });
 
       await fetchTickets();
@@ -447,7 +469,7 @@ export default function TicketList() {
           </div>
 
           <form onSubmit={handleSearchSubmit} className="mb-3">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="relative min-w-[200px] flex-1">
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
@@ -459,27 +481,31 @@ export default function TicketList() {
                 />
               </div>
 
-              <div className="relative" ref={filterMenuRef}>
+              <div className="group relative" ref={filterMenuRef}>
                 <button
                   type="button"
                   onClick={() => {
                     setShowFilterMenu((previous) => !previous);
                     setShowSortMenu(false);
                   }}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                     filterButtonActive
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
+                  aria-label="Filtrar atendimentos"
                 >
                   <Filter size={16} />
-                  Filtro
-                  {filterCount > 0 && (
-                    <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-bold text-primary">
-                      {filterCount}
+                  {filterBadgeCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white shadow-md">
+                      {filterBadgeCount}
                     </span>
                   )}
                 </button>
+                <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+                  Filtrar
+                  <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700" />
+                </div>
 
                 {showFilterMenu && (
                   <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-gray-200 bg-white shadow-xl">
@@ -546,28 +572,38 @@ export default function TicketList() {
                         {activeFilterCategory === 'status' && (
                           <div className="space-y-2">
                             {STATUS_OPTIONS.map((option) => {
-                              const active = filters.status === option.value;
+                              const active = activeStatuses.includes(option.value);
                               return (
                                 <button
                                   key={option.value}
                                   type="button"
-                                  onClick={() => handleStatusClick(option.value)}
+                                  onClick={() => void handleStatusToggle(option.value)}
                                   className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition ${
-                                    active ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                                    active
+                                      ? 'border-primary bg-primary/10 text-primary'
+                                      : 'border-gray-200 text-gray-600 hover:bg-gray-100'
                                   }`}
                                 >
-                                  {option.label}
-                                  {active && <span className="text-[10px] font-semibold uppercase text-primary">Ativo</span>}
+                                  <span className="flex items-center gap-2">
+                                    <span
+                                      className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+                                        active ? 'border-primary bg-primary/10 text-primary' : 'border-gray-300 text-gray-400'
+                                      }`}
+                                    >
+                                      {active && <Check size={12} />}
+                                    </span>
+                                    {option.label}
+                                  </span>
                                 </button>
                               );
                             })}
-                            {filters.status && (
+                            {hasCustomStatus && (
                               <button
                                 type="button"
-                                onClick={() => handleStatusClick(filters.status!)}
+                                onClick={() => void setFilter('status', [...DEFAULT_STATUS_FILTERS])}
                                 className="w-full rounded-lg bg-gray-50 px-3 py-2 text-[11px] font-semibold text-gray-500 transition hover:bg-gray-100"
                               >
-                                Limpar status
+                                Restaurar padrão
                               </button>
                             )}
                           </div>
@@ -614,19 +650,25 @@ export default function TicketList() {
                 )}
               </div>
 
-              <div className="relative" ref={sortMenuRef}>
+              <div className="group relative" ref={sortMenuRef}>
                 <button
                   type="button"
                   onClick={() => {
                     setShowSortMenu((previous) => !previous);
                     setShowFilterMenu(false);
                   }}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                     sortOption ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
+                  aria-label="Classificar atendimentos"
                 >
-                  Classificacao
+                  <ArrowUpDown size={16} />
+                  {sortOption && <span className="absolute -top-1.5 -right-1.5 h-2.5 w-2.5 rounded-full bg-primary shadow-md" />}
                 </button>
+                <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+                  Classificar
+                  <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700" />
+                </div>
 
                 {showSortMenu && (
                   <div className="absolute right-0 z-20 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
@@ -659,15 +701,21 @@ export default function TicketList() {
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                disabled={!hasActiveFilters}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <X size={14} />
-                Resetar
-              </button>
+              <div className="group relative">
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  disabled={!hasActiveFilters}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label="Resetar filtros"
+                >
+                  <X size={14} />
+                </button>
+                <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700">
+                  Resetar
+                  <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700" />
+                </div>
+              </div>
             </div>
           </form>
         </div>
