@@ -277,7 +277,7 @@ export default function ChatArea() {
     setQuotedMessage
   } = useMessages({ ticketId: selectedTicket?.id });
 
-  const visibleMessages = useMemo(() => messages.filter((message) => !message.isPrivate), [messages]);
+  const visibleMessages = useMemo(() => messages, [messages]);
 
 
   const [newMessage, setNewMessage] = useState('');
@@ -1309,7 +1309,7 @@ export default function ChatArea() {
           {selectedTicket.status === 'CLOSED' && (
             <button
               onClick={handleCreateFollowUpTicket}
-d              disabled={creatingFollowUpTicket}
+              disabled={creatingFollowUpTicket}
               className='inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60'
             >
               {creatingFollowUpTicket ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus size={14} />}

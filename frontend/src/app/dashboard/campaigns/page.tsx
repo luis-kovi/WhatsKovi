@@ -145,7 +145,7 @@ export default function CampaignsPage() {
   return (
     <div className="flex min-h-screen bg-gray-100 transition-colors duration-300">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className="ml-20 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
           <header className="flex flex-col gap-3 border-b border-gray-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
