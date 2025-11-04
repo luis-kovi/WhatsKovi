@@ -135,7 +135,7 @@ export default function SatisfactionDashboard() {
   return (
     <div className="flex min-h-screen bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className="ml-20 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl space-y-6 px-8 py-10">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

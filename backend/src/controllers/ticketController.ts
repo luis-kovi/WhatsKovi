@@ -78,6 +78,7 @@ export const listTickets = async (req: AuthRequest, res: Response) => {
       include: {
         ...ticketInclude,
         messages: {
+          where: { isPrivate: false },
           orderBy: { createdAt: 'desc' },
           take: 1
         }

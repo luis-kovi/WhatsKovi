@@ -319,7 +319,7 @@ export default function AdvancedSearchPage() {
   return (
     <div className="flex min-h-screen bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="ml-20 flex flex-1 flex-col overflow-hidden">
         <header className="border-b border-gray-200 bg-white px-8 py-6 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
             <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-slate-400">

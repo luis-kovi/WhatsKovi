@@ -114,7 +114,7 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="ml-20 flex flex-1 flex-col overflow-hidden">
         <header className="border-b border-gray-200 bg-white px-4 py-0.5 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
           <SummaryCards
             loading={metadataLoading}

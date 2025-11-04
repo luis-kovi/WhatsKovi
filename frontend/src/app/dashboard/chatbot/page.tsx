@@ -178,7 +178,7 @@ export default function ChatbotPage() {
   return (
     <div className="flex min-h-screen bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
-      <div className="flex flex-1">
+      <div className="ml-20 flex flex-1">
         <FlowList
           flows={flows}
           selectedId={isCreatingNew ? undefined : selectedFlowId}

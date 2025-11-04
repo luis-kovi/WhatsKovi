@@ -259,10 +259,17 @@ const removeMessageById = (messages: TicketMessage[], messageId: string) =>
 const getLastMessage = (messages: TicketMessage[]) =>
   messages.length > 0 ? messages[messages.length - 1] : null;
 
+const getLastPublicMessage = (messages: TicketMessage[]) => {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (!messages[i].isPrivate) return messages[i];
+  }
+  return null;
+};
+
 const syncTicketsAfterMessages = (tickets: Ticket[], ticketId: string, messages: TicketMessage[]) =>
   tickets.map((ticket) => {
     if (ticket.id !== ticketId) return ticket;
-    const lastMessage = getLastMessage(messages);
+    const lastMessage = getLastPublicMessage(messages);
     return {
       ...ticket,
       lastMessageAt: lastMessage ? lastMessage.createdAt : ticket.lastMessageAt,
