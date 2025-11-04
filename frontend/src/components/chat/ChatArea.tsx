@@ -278,7 +278,14 @@ export default function ChatArea() {
   } = useMessages({ ticketId: selectedTicket?.id });
 
   const visibleMessages = useMemo(() => messages, [messages]);
-
+  const quotedComposerSource =
+    quotedMessage?.deliveryMetadata && typeof quotedMessage.deliveryMetadata['source'] === 'string'
+      ? (quotedMessage.deliveryMetadata['source'] as string)
+      : undefined;
+  const quotedComposerAuthor =
+    (quotedComposerSource ?? '').toUpperCase() === 'CHATBOT'
+      ? 'KOVINHO 🤖'
+      : selectedTicket?.contact.name ?? 'Contato';
 
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -692,7 +699,17 @@ export default function ChatArea() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      
+      const options: MediaRecorderOptions = {};
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        options.mimeType = 'audio/ogg;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        options.mimeType = 'audio/webm';
+      }
+      
+      const recorder = new MediaRecorder(stream, options);
 
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
@@ -723,14 +740,7 @@ export default function ChatArea() {
           return;
         }
 
-        const extension = mimeType.includes('ogg')
-          ? 'ogg'
-          : mimeType.includes('mp3')
-          ? 'mp3'
-          : mimeType.includes('wav')
-          ? 'wav'
-          : 'webm';
-
+        const extension = mimeType.includes('ogg') ? 'ogg' : 'webm';
         const audioFile = new File([blob], `audio-${Date.now()}.${extension}`, { type: mimeType });
 
         setUploadingFile(true);
@@ -1288,7 +1298,7 @@ export default function ChatArea() {
             Exportar
           </button>
 
-          {selectedTicket.status === 'PENDING' && (
+          {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
             <button
               onClick={handleAcceptTicket}
               className='rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90'
@@ -1390,10 +1400,18 @@ export default function ChatArea() {
           </div>
         ) : (
           visibleMessages.map((message) => {
-            const isFromAgent = Boolean(message.userId);
-            const author = message.user?.name ?? selectedTicket.contact.name;
+            const metadata = (message.deliveryMetadata ?? null) as Record<string, unknown> | null;
+            const source =
+              metadata && typeof metadata['source'] === 'string'
+                ? (metadata['source'] as string)
+                : undefined;
+            const isBotMessage = (source ?? '').toUpperCase() === 'CHATBOT';
+            const isFromAgent = isBotMessage || Boolean(message.userId);
+            const author = isBotMessage
+              ? 'KOVINHO 🤖'
+              : message.user?.name ?? selectedTicket.contact.name;
             const isOwner = Boolean(message.userId && message.userId === currentUserId);
-            const canModify = isOwner || Boolean(isAdmin);
+            const canModify = !isBotMessage && (isOwner || Boolean(isAdmin));
             const hasBody = Boolean(message.body && message.body.trim().length > 0);
             const isTextual = hasBody && ['TEXT', 'NOTE'].includes(message.type);
             const canEdit = Boolean(canModify && isTextual);
@@ -1409,6 +1427,7 @@ export default function ChatArea() {
                 contactName={selectedTicket.contact.name}
                 currentUserId={currentUserId ?? undefined}
                 isFromAgent={isFromAgent}
+                isFromBot={isBotMessage}
                 reactionPalette={reactionPalette}
                 onQuote={handleQuoteMessage}
                 onToggleReaction={handleToggleReaction}
@@ -1465,7 +1484,7 @@ export default function ChatArea() {
           <div className='mb-3 flex items-start justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-primary'>
             <div className='pr-4'>
               <p className='font-semibold'>
-                {quotedMessage.user?.name ?? selectedTicket.contact.name}
+                {quotedMessage.user?.name ?? quotedComposerAuthor}
               </p>
               <p className='mt-1 opacity-80'>
                 {quotedMessage.body || (quotedMessage.mediaUrl ? 'Midia anexada' : 'Mensagem sem texto')}

@@ -111,7 +111,8 @@ export const getTicket = async (req: AuthRequest, res: Response) => {
                 type: true,
                 mediaUrl: true,
                 createdAt: true,
-                user: { select: { id: true, name: true, avatar: true } }
+                user: { select: { id: true, name: true, avatar: true } },
+                deliveryMetadata: true
               }
             },
             reactions: {
@@ -355,14 +356,14 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Nenhuma conexao WhatsApp configurada' });
     }
 
-    const ticket = await prisma.ticket.create({
-      data: {
-        contactId: contact.id,
-        whatsappId: connection.id,
-        status: 'PENDING',
-        priority: (priority && VALID_PRIORITIES.includes(priority) ? priority : 'MEDIUM') as any,
-        queueId: queueId || undefined,
-        carPlate: formattedPlate
+  const ticket = await prisma.ticket.create({
+    data: {
+      contactId: contact.id,
+      whatsappId: connection.id,
+      status: 'OPEN',
+      priority: (priority && VALID_PRIORITIES.includes(priority) ? priority : 'MEDIUM') as any,
+      queueId: queueId || undefined,
+      carPlate: formattedPlate
       }
     });
 
@@ -538,8 +539,6 @@ export const removeTicketTag = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Erro ao remover tag do ticket' });
   }
 };
-
-
 
 
 

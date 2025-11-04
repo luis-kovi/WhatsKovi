@@ -20,6 +20,7 @@ enum UserStatus {
 }
 
 enum TicketStatus {
+  BOT
   PENDING
   OPEN
   CLOSED
@@ -900,6 +901,14 @@ model AdvancedSettings {
   smtpPassword               String?
   smtpFrom                   String?
   smtpSecure                 Boolean  @default(true)
+  aiEnabled                  Boolean  @default(false)
+  aiRoutingEnabled           Boolean  @default(false)
+  aiProvider                 String   @default("OPENAI")
+  aiModel                    String?
+  aiConfidenceThreshold      Float    @default(0.6)
+  aiFallbackQueueId          String?
+  aiGeminiApiKey             String?
+  aiOpenAiApiKey             String?
   updatedById                String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt

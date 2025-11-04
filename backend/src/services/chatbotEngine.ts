@@ -1,4 +1,4 @@
-import { ChatbotSender, MessageChannel, MessageStatus, Prisma } from '@prisma/client';
+import { ChatbotSender, MessageChannel, MessageStatus, Prisma, TicketStatus } from '@prisma/client';
 import prisma from '../config/database';
 import {
   ChatbotFlowDefinition,
@@ -35,6 +35,7 @@ type MessagePayload = Prisma.MessageGetPayload<{
         mediaUrl: true;
         createdAt: true;
         user: { select: { id: true; name: true; avatar: true } };
+        deliveryMetadata: true;
       };
     };
   };
@@ -69,7 +70,8 @@ const messageInclude = {
       type: true,
       mediaUrl: true,
       createdAt: true,
-      user: { select: { id: true, name: true, avatar: true } }
+      user: { select: { id: true, name: true, avatar: true } },
+      deliveryMetadata: true
     }
   }
 } as const;
@@ -512,12 +514,11 @@ const runFlow = (
         }
         transferQueueId = (node as any).queueId ?? null;
         pushHistory(node.id);
-        currentNodeId = node.next ?? null;
-        nextNodeId = node.next ?? null;
-        if (!currentNodeId) {
-          completed = true;
-          state.completed = true;
-        }
+        state.waitingFor = undefined;
+        currentNodeId = null;
+        nextNodeId = null;
+        completed = true;
+        state.completed = true;
         break;
       }
       case 'end': {
@@ -575,7 +576,11 @@ const dispatchBotMessages = async (
           type: 'TEXT',
           status: MessageStatus.SENT,
           channel: MessageChannel.WHATSAPP,
-          ticketId: ticket.id
+          ticketId: ticket.id,
+          deliveryMetadata: {
+            source: 'CHATBOT',
+            author: 'KOVINHO 🤖'
+          }
         },
         include: messageInclude
       });
@@ -635,7 +640,12 @@ const sendOfflineMessage = async (ticket: TicketChatbotContext, message: string)
         type: 'TEXT',
         status: MessageStatus.SENT,
         channel: MessageChannel.WHATSAPP,
-        ticketId: ticket.id
+        ticketId: ticket.id,
+        deliveryMetadata: {
+          source: 'CHATBOT',
+          author: 'KOVINHO 🤖',
+          context: 'OFFLINE'
+        }
       },
       include: messageInclude
     });
@@ -700,12 +710,21 @@ const performTransfer = async (
 ) => {
   const targetQueueId = queueIdFromNode ?? fallbackQueueId ?? ticket.queueId ?? null;
 
+  let nextStatus: TicketStatus;
+  if (ticket.status === TicketStatus.CLOSED) {
+    nextStatus = TicketStatus.OPEN;
+  } else if (ticket.status === TicketStatus.BOT) {
+    nextStatus = TicketStatus.PENDING;
+  } else {
+    nextStatus = ticket.status;
+  }
+
   const updatedTicket = await prisma.ticket.update({
     where: { id: ticket.id },
     data: {
       queueId: targetQueueId ?? undefined,
       userId: null,
-      status: ticket.status === 'CLOSED' ? 'OPEN' : ticket.status
+      status: nextStatus
     },
     include: ticketInclude
   });
@@ -740,6 +759,10 @@ export const processIncomingMessageForChatbot = async (params: {
     ]);
 
     if (!ticket || !ticket.contact || !ticket.whatsapp || !message) {
+      return;
+    }
+
+    if (ticket.status !== TicketStatus.BOT) {
       return;
     }
 

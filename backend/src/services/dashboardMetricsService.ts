@@ -48,6 +48,7 @@ type PeriodSummary = {
     closed: number;
     open: number;
     pending: number;
+    bot: number;
     messages: number;
   };
   averages: {
@@ -365,19 +366,25 @@ export const computeDashboardMetrics = async ({
     throw new Error('Período inválido: data inicial maior que final');
   }
 
-  const [currentRange, previousRange, openCount, pendingCount] = await Promise.all([
+  const [currentRange, previousRange, openCount, pendingCount, botCount] = await Promise.all([
     fetchRangeDataset(normalizedStart, normalizedEnd, queueId, userId),
     fetchRangeDataset(previousStart, previousEnd, queueId, userId),
     prisma.ticket.count({
       where: {
         ...buildBaseTicketFilter(queueId, userId),
-        status: 'OPEN'
+        status: TicketStatus.OPEN
       }
     }),
     prisma.ticket.count({
       where: {
         ...buildBaseTicketFilter(queueId, userId),
-        status: 'PENDING'
+        status: TicketStatus.PENDING
+      }
+    }),
+    prisma.ticket.count({
+      where: {
+        ...buildBaseTicketFilter(queueId, userId),
+        status: TicketStatus.BOT
       }
     })
   ]);
@@ -550,6 +557,7 @@ export const computeDashboardMetrics = async ({
       closed: closedCount,
       open: openCount,
       pending: pendingCount,
+      bot: botCount,
       messages: currentRange.messages.length
     },
     averages: {

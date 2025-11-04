@@ -7,7 +7,8 @@ RUN apk add --no-cache \
   nss \
   freetype \
   harfbuzz \
-  ttf-freefont
+  ttf-freefont \
+  ffmpeg
 
 ENV CHROMIUM_PATH=/usr/bin/chromium-browser \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser

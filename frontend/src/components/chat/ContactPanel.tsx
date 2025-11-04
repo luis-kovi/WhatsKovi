@@ -10,6 +10,7 @@ import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
 import { useScheduledMessageStore } from '@/store/scheduledMessageStore';
 
 const STATUS_LABELS: Record<string, string> = {
+  BOT: 'Chatbot',
   PENDING: 'Pendente',
   OPEN: 'Em atendimento',
   CLOSED: 'Encerrado'
@@ -47,6 +48,7 @@ const RECURRENCE_LABELS: Record<string, string> = {
 };
 
 const TICKET_STATUS_STYLES: Record<string, string> = {
+  BOT: 'bg-indigo-100 text-indigo-600',
   PENDING: 'bg-amber-100 text-amber-600',
   OPEN: 'bg-sky-100 text-sky-600',
   CLOSED: 'bg-slate-200 text-slate-600'

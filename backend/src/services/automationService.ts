@@ -374,7 +374,7 @@ const executeAssignAgentAction = async (
     by: ['userId'],
     where: {
       userId: { in: agents.map((agent) => agent.id) },
-      status: { in: [TicketStatus.PENDING, TicketStatus.OPEN] }
+      status: { in: [TicketStatus.BOT, TicketStatus.PENDING, TicketStatus.OPEN] }
     },
     _count: { _all: true }
   });
@@ -443,7 +443,10 @@ const executeAssignAgentAction = async (
     where: { id: context.ticket.id },
     data: {
       userId: selected.id,
-      status: context.ticket.status === TicketStatus.PENDING ? TicketStatus.OPEN : context.ticket.status
+      status:
+        context.ticket.status === TicketStatus.PENDING || context.ticket.status === TicketStatus.BOT
+          ? TicketStatus.OPEN
+          : context.ticket.status
     }
   });
 

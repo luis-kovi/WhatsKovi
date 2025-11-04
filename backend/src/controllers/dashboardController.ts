@@ -37,6 +37,7 @@ export const getDashboardSummary = async (_req: Request, res: Response) => {
 
     const ticketsSummary = {
       total: ticketCounts.reduce((acc, item) => acc + extractCount(item), 0),
+      bot: getCountForStatus('BOT'),
       pending: getCountForStatus('PENDING'),
       open: getCountForStatus('OPEN'),
       closed: getCountForStatus('CLOSED')

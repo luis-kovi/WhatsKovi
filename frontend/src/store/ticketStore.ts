@@ -30,6 +30,7 @@ export interface QuotedMessage {
   mediaUrl?: string | null;
   createdAt: string;
   user: ReactionUser | null;
+  deliveryMetadata?: Record<string, unknown> | null;
 }
 
 export interface TicketMessage {
@@ -48,6 +49,7 @@ export interface TicketMessage {
   user: ReactionUser | null;
   quotedMessage: QuotedMessage | null;
   reactions: MessageReaction[];
+  deliveryMetadata?: Record<string, unknown> | null;
 }
 
 export interface TicketTag {
@@ -179,6 +181,7 @@ type RawQuotedMessage = {
   mediaUrl?: string | null;
   createdAt: string;
   user?: ReactionUser | null;
+  deliveryMetadata?: Record<string, unknown> | null;
 };
 
 type RawMessage = {
@@ -196,6 +199,7 @@ type RawMessage = {
   user?: ReactionUser | null;
   quotedMessage?: RawQuotedMessage | null;
   reactions?: RawReaction[];
+  deliveryMetadata?: Record<string, unknown> | null;
 };
 
 type MessageSocketPayload = RawMessage & { ticketId: string };
@@ -304,7 +308,8 @@ const normalizeMessage = (message: RawMessage, ticketId: string): TicketMessage 
         type: (message.quotedMessage.type ?? 'TEXT') as MessageType,
         mediaUrl: resolveAssetUrl(message.quotedMessage.mediaUrl ?? null),
         createdAt: message.quotedMessage.createdAt,
-        user: normalizeUser(message.quotedMessage.user ?? null)
+        user: normalizeUser(message.quotedMessage.user ?? null),
+        deliveryMetadata: message.quotedMessage.deliveryMetadata ?? null
       }
     : null;
 
@@ -318,22 +323,23 @@ const normalizeMessage = (message: RawMessage, ticketId: string): TicketMessage 
       }))
     : [];
 
-    return {
-      id: message.id,
-      ticketId,
-      body: message.body ?? null,
-      type: (message.type ?? 'TEXT') as MessageType,
-      channel: (message.channel ?? 'WHATSAPP') as MessageChannel,
-      status: (message.status ?? 'PENDING') as MessageStatus,
-      mediaUrl: resolveAssetUrl(message.mediaUrl ?? null),
-      isPrivate: Boolean(message.isPrivate),
+  return {
+    id: message.id,
+    ticketId,
+    body: message.body ?? null,
+    type: (message.type ?? 'TEXT') as MessageType,
+    channel: (message.channel ?? 'WHATSAPP') as MessageChannel,
+    status: (message.status ?? 'PENDING') as MessageStatus,
+    mediaUrl: resolveAssetUrl(message.mediaUrl ?? null),
+    isPrivate: Boolean(message.isPrivate),
     createdAt: message.createdAt,
     editedAt: message.editedAt ?? null,
     editedBy: message.editedBy ?? null,
     userId: message.userId ?? null,
     user: normalizeUser(message.user ?? null),
     quotedMessage: quoted,
-    reactions
+    reactions,
+    deliveryMetadata: message.deliveryMetadata ?? null
   };
 };
 
@@ -593,7 +599,8 @@ export const useTicketStore = create<TicketState>((set, get) => ({
       const existingActive = get().tickets.find((ticket) => {
         const ticketPhone = ticket.contact.phoneNumber?.replace(/\D/g, '');
         return (
-          ticketPhone === phoneDigits && (ticket.status === 'PENDING' || ticket.status === 'OPEN')
+          ticketPhone === phoneDigits &&
+          (ticket.status === 'BOT' || ticket.status === 'PENDING' || ticket.status === 'OPEN')
         );
       });
 
@@ -666,7 +673,7 @@ export const useTicketStore = create<TicketState>((set, get) => ({
         state.tickets.find((ticket) => ticket.id === ticketId) ??
         (state.selectedTicket && state.selectedTicket.id === ticketId ? state.selectedTicket : null);
 
-      if (ticketBeforeSend && ticketBeforeSend.status === 'PENDING') {
+      if (ticketBeforeSend && (ticketBeforeSend.status === 'PENDING' || ticketBeforeSend.status === 'BOT')) {
         await state.acceptTicket(ticketId);
       }
 

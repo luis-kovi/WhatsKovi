@@ -66,6 +66,21 @@ const applyBranding = (general: GeneralSettings | null) => {
   }
 };
 
+const normalizeServiceSettings = (service: ServiceSettings | null): ServiceSettings | null => {
+  if (!service) return null;
+  return {
+    ...service,
+    aiEnabled: service.aiEnabled ?? false,
+    aiRoutingEnabled: service.aiRoutingEnabled ?? false,
+    aiProvider: service.aiProvider ?? 'OPENAI',
+    aiModel: service.aiModel ?? null,
+    aiConfidenceThreshold: service.aiConfidenceThreshold ?? 0.6,
+    aiFallbackQueueId: service.aiFallbackQueueId ?? null,
+    aiGeminiApiKey: service.aiGeminiApiKey ?? null,
+    aiOpenAiApiKey: service.aiOpenAiApiKey ?? null
+  };
+};
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   general: null,
   service: null,
@@ -84,7 +99,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       applyBranding(data.general);
       set({
         general: data.general,
-        service: data.service,
+        service: normalizeServiceSettings(data.service),
         notifications: {
           ...data.notifications,
           smtpHost: data.notifications.smtpHost ?? null,
@@ -134,8 +149,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ savingService: true, error: undefined });
     try {
       const updated = await persistServiceSettings(payload);
-      set({ service: updated, savingService: false });
-      return updated;
+      const service = normalizeServiceSettings(updated);
+      set({ service, savingService: false });
+      return service;
     } catch (error) {
       console.error('[Settings] failed to save service settings', error);
       set({ savingService: false, error: 'Erro ao salvar configuracoes de atendimento' });

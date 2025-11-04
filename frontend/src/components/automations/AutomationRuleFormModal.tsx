@@ -35,7 +35,7 @@ type ActionEntry = {
 };
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-const STATUSES = ['PENDING', 'OPEN', 'CLOSED'];
+const STATUSES = ['BOT', 'PENDING', 'OPEN', 'CLOSED'];
 const TRIGGERS: AutomationRule['trigger'][] = [
   'MESSAGE_RECEIVED',
   'TICKET_CREATED',
@@ -55,7 +55,7 @@ const makeId = () =>
 
 const createDefaultCondition = (): AutomationCondition => ({
   type: 'ticket_status',
-  statuses: ['PENDING', 'OPEN']
+  statuses: ['BOT', 'PENDING', 'OPEN']
 });
 
 const createDefaultAction = (): AutomationAction => ({
@@ -153,7 +153,7 @@ export default function AutomationRuleFormModal({
 
         switch (nextType) {
           case 'ticket_status':
-            nextCondition = { type: nextType, statuses: ['PENDING', 'OPEN'] };
+            nextCondition = { type: nextType, statuses: ['BOT', 'PENDING', 'OPEN'] };
             break;
           case 'queue':
             nextCondition = { type: nextType, queueIds: [] };

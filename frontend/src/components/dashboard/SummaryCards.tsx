@@ -32,6 +32,7 @@ export default function SummaryCards({
 }: SummaryCardsProps) {
   const metrics: Array<{ key: string; label: string; value: number | null }> = [
     { key: 'total', label: 'Atendimentos totais', value: data?.tickets.total ?? null },
+    { key: 'bot', label: 'Em bot', value: data?.tickets.bot ?? null },
     { key: 'pending', label: 'Pendentes', value: data?.tickets.pending ?? null },
     { key: 'open', label: 'Em atendimento', value: data?.tickets.open ?? null },
     { key: 'agentsOnline', label: 'Agentes online', value: data?.agents.online ?? null },

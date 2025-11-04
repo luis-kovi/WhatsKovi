@@ -1,14 +1,24 @@
 import { create } from 'zustand';
-import { ChatbotFlow, ChatbotFlowStats, ChatbotFlowSummary, ChatbotTestResult } from '@/types/chatbot';
+import {
+  ChatbotAiConfig,
+  ChatbotAiRoutingRequest,
+  ChatbotAiRoutingResult,
+  ChatbotFlow,
+  ChatbotFlowStats,
+  ChatbotFlowSummary,
+  ChatbotTestResult
+} from '@/types/chatbot';
 import {
   createChatbotFlow,
   deleteChatbotFlow,
   fetchChatbotFlow,
   fetchChatbotFlows,
   fetchChatbotFlowStats,
+  fetchChatbotAiConfig,
   ChatbotFlowPayload,
   testChatbotFlow,
-  updateChatbotFlow
+  updateChatbotFlow,
+  evaluateChatbotAiRouting
 } from '@/services/chatbot';
 
 interface ChatbotState {
@@ -17,16 +27,24 @@ interface ChatbotState {
   currentFlow?: ChatbotFlow | null;
   stats?: ChatbotFlowStats | null;
   testResult?: ChatbotTestResult | null;
+  aiConfig?: ChatbotAiConfig | null;
+  aiSuggestion?: ChatbotAiRoutingResult | null;
   loading: boolean;
   saving: boolean;
   testing: boolean;
+  aiLoading: boolean;
+  aiAnalyzing: boolean;
   error?: string | null;
+  aiError?: string | null;
   fetchFlows: () => Promise<void>;
   selectFlow: (id?: string | null) => Promise<void>;
   saveFlow: (payload: ChatbotFlowPayload, id?: string) => Promise<ChatbotFlow>;
   removeFlow: (id: string) => Promise<void>;
   runFlowTest: (id: string, messages: string[]) => Promise<void>;
   resetTest: () => void;
+  fetchAiConfig: () => Promise<void>;
+  analyzeTranscript: (payload: ChatbotAiRoutingRequest) => Promise<ChatbotAiRoutingResult | null>;
+  resetAiSuggestion: () => void;
 }
 
 export const useChatbotStore = create<ChatbotState>((set, get) => ({
@@ -35,10 +53,15 @@ export const useChatbotStore = create<ChatbotState>((set, get) => ({
   currentFlow: undefined,
   stats: undefined,
   testResult: undefined,
+  aiConfig: undefined,
+  aiSuggestion: undefined,
   loading: false,
   saving: false,
   testing: false,
+  aiLoading: false,
+  aiAnalyzing: false,
   error: null,
+  aiError: null,
 
   fetchFlows: async () => {
     set({ loading: true, error: null });
@@ -135,5 +158,34 @@ export const useChatbotStore = create<ChatbotState>((set, get) => ({
 
   resetTest: () => {
     set({ testResult: undefined });
+  },
+
+  fetchAiConfig: async () => {
+    set({ aiLoading: true, aiError: null });
+    try {
+      const aiConfig = await fetchChatbotAiConfig();
+      set({ aiConfig, aiLoading: false });
+    } catch (error) {
+      console.error('Erro ao carregar configuracao de IA do chatbot:', error);
+      set({ aiLoading: false, aiError: 'Nao foi possivel carregar a configuracao de IA' });
+      throw error;
+    }
+  },
+
+  analyzeTranscript: async (payload) => {
+    set({ aiAnalyzing: true, aiError: null });
+    try {
+      const result = await evaluateChatbotAiRouting(payload);
+      set({ aiAnalyzing: false, aiSuggestion: result });
+      return result;
+    } catch (error) {
+      console.error('Erro ao analisar conversa com IA:', error);
+      set({ aiAnalyzing: false, aiError: 'Nao foi possivel analisar a conversa' });
+      return null;
+    }
+  },
+
+  resetAiSuggestion: () => {
+    set({ aiSuggestion: undefined, aiError: null });
   }
 }));

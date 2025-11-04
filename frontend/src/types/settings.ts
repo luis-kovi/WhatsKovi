@@ -17,6 +17,14 @@ export type ServiceSettings = {
   perAgentTicketLimit: number;
   soundEnabled: boolean;
   satisfactionSurveyEnabled: boolean;
+  aiEnabled: boolean;
+  aiRoutingEnabled: boolean;
+  aiProvider: 'OPENAI' | 'GEMINI' | 'HYBRID';
+  aiModel?: string | null;
+  aiConfidenceThreshold?: number | null;
+  aiFallbackQueueId?: string | null;
+  aiGeminiApiKey?: string | null;
+  aiOpenAiApiKey?: string | null;
 };
 
 export type NotificationSettings = {

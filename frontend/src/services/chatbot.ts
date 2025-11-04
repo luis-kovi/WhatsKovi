@@ -1,5 +1,9 @@
 import api from './api';
+import { isAxiosError } from 'axios';
 import {
+  ChatbotAiConfig,
+  ChatbotAiRoutingRequest,
+  ChatbotAiRoutingResult,
   ChatbotFlow,
   ChatbotFlowDefinition,
   ChatbotFlowStats,
@@ -53,6 +57,70 @@ export const deleteChatbotFlow = async (id: string) => {
 export const fetchChatbotFlowStats = async (id: string): Promise<ChatbotFlowStats> => {
   const response = await api.get(`/chatbot/flows/${id}/stats`);
   return response.data;
+};
+
+export const fetchChatbotAiConfig = async (): Promise<ChatbotAiConfig> => {
+  try {
+    const response = await api.get('/chatbot/ai/config');
+    return response.data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return {
+        provider: 'HYBRID',
+        temperature: 0.5,
+        topP: 0.9,
+        defaultModel: 'local-fallback',
+        availableModels: [
+          { name: 'local-fallback', provider: 'HYBRID', description: 'Fallback local para simulacoes' }
+        ],
+        fallbackQueueId: null,
+        fallbackChannel: null,
+        lastTrainedAt: null,
+        enabled: false,
+        confidenceThreshold: 0.6
+      };
+    }
+    throw error;
+  }
+};
+
+export const updateChatbotAiConfig = async (payload: Partial<ChatbotAiConfig>): Promise<ChatbotAiConfig> => {
+  const response = await api.put('/chatbot/ai/config', payload);
+  return response.data;
+};
+
+export const evaluateChatbotAiRouting = async (
+  payload: ChatbotAiRoutingRequest
+): Promise<ChatbotAiRoutingResult> => {
+  try {
+    const response = await api.post('/chatbot/ai/route', payload);
+    return response.data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      const lastMessage = payload.transcript.at(-1)?.content ?? '';
+      const normalized = lastMessage.trim();
+      const summary =
+        normalized.length > 0
+          ? normalized.length > 160
+            ? `${normalized.slice(0, 157)}...`
+            : normalized
+          : undefined;
+      return {
+        queue: null,
+        channel: payload.channel ?? null,
+        confidence: 0.4,
+        reasons: ['Servico de IA nao disponivel no backend. Exibindo simulacao local.'],
+        tags: [],
+        summary,
+        sentiment: undefined,
+        model: 'local-fallback',
+        createdAt: new Date().toISOString(),
+        followUp: 'Configure o backend para habilitar o roteamento inteligente.',
+        escalationRecommended: false
+      };
+    }
+    throw error;
+  }
 };
 
 export const testChatbotFlow = async (

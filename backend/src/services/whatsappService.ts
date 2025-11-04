@@ -1,8 +1,9 @@
 import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import qrcode from 'qrcode';
-import { AutomationTrigger, MessageChannel, MessageStatus } from '@prisma/client';
+import { AutomationTrigger, MessageChannel, MessageStatus, TicketStatus } from '@prisma/client';
 import prisma from '../config/database';
 import { io } from '../server';
 import { applyAutomaticTagsToTicket } from './tagAutomation';
@@ -196,7 +197,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
       where: {
         contactId: contact.id,
         whatsappId: connectionId,
-        status: { in: ['PENDING', 'OPEN'] }
+        status: { in: [TicketStatus.BOT, TicketStatus.PENDING, TicketStatus.OPEN] }
       }
     });
 
@@ -205,7 +206,7 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
         data: {
           contactId: contact.id,
           whatsappId: connectionId,
-          status: 'PENDING',
+          status: TicketStatus.BOT,
           priority: 'MEDIUM'
         },
         include: {
@@ -232,7 +233,9 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
         })) ?? ticket;
 
       io.emit('ticket:new', ticket);
-      await notifyNewTicketCreated(ticket);
+      if (ticket.status !== TicketStatus.BOT) {
+        await notifyNewTicketCreated(ticket);
+      }
       emitTicketCreatedEvent(ticket.id).catch((error) => {
         console.warn('[Integration] Failed to emit ticket.created event', error);
       });
@@ -303,7 +306,9 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
     // Atualiza lista de tickets (inclui avatar sincronizado do contato)
     io.emit('ticket:update', ticket);
     io.emit('message:new', { ...prismaMessage, ticketId: ticket.id });
-    await notifyIncomingTicketMessage(ticket, prismaMessage.body ?? '', { actorId: null });
+    if (ticket.status !== TicketStatus.BOT) {
+      await notifyIncomingTicketMessage(ticket, prismaMessage.body ?? '', { actorId: null });
+    }
     emitMessageEvent(prismaMessage.id, 'INBOUND').catch((error) => {
       console.warn('[Integration] Failed to emit message.received event', error);
     });
@@ -336,7 +341,12 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
                 type: 'TEXT',
                 status: MessageStatus.SENT,
                 channel: MessageChannel.WHATSAPP,
-                isPrivate: false
+                isPrivate: false,
+                deliveryMetadata: {
+                  source: 'CHATBOT',
+                  author: 'KOVINHO 🤖',
+                  context: 'AUTO_REPLY'
+                }
               }
             });
 
@@ -390,15 +400,31 @@ export const sendWhatsAppMessage = async (
 
     let sent: any;
     if (mediaPath) {
-      const media = MessageMedia.fromFilePath(mediaPath);
-      if (options?.mimeType) {
-        media.mimetype = options.mimeType;
+      let finalMediaPath = mediaPath;
+      
+      // Converter webm para ogg se for áudio
+      if (options?.mimeType?.startsWith('audio/') && mediaPath.endsWith('.webm')) {
+        const oggPath = mediaPath.replace('.webm', '.ogg');
+        try {
+          execSync(`ffmpeg -i "${mediaPath}" -c:a libopus -b:a 64k "${oggPath}"`, { stdio: 'ignore' });
+          finalMediaPath = oggPath;
+          // Remover arquivo webm original
+          fs.unlinkSync(mediaPath);
+        } catch (conversionError) {
+          console.error('Erro ao converter audio:', conversionError);
+          // Se falhar, tenta enviar o original mesmo
+        }
       }
-      const extra: any = { caption: message };
+      
+      const media = MessageMedia.fromFilePath(finalMediaPath);
+      const extra: any = {};
+      
       if (options?.mimeType?.startsWith('audio/')) {
         extra.sendAudioAsVoice = true;
-        media.mimetype = 'audio/ogg; codecs=opus';
+      } else if (message) {
+        extra.caption = message;
       }
+      
       if (options?.quotedWhatsAppMessageId) {
         extra.quotedMessageId = options.quotedWhatsAppMessageId;
       }

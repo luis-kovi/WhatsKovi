@@ -12,8 +12,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const STATUS_OPTIONS = [
-  { value: 'OPEN', label: 'Em atendimento' },
+  { value: 'BOT', label: 'Chatbot' },
   { value: 'PENDING', label: 'Pendentes' },
+  { value: 'OPEN', label: 'Em atendimento' },
   { value: 'CLOSED', label: 'Finalizados' }
 ];
 
@@ -62,6 +63,8 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
+    case 'BOT':
+      return 'bg-sky-500';
     case 'PENDING':
       return 'bg-yellow-500';
     case 'OPEN':
@@ -75,6 +78,8 @@ const getStatusColor = (status: string) => {
 
 const getStatusLabel = (status: string) => {
   switch (status) {
+    case 'BOT':
+      return 'Chatbot';
     case 'PENDING':
       return 'Pendente';
     case 'OPEN':
