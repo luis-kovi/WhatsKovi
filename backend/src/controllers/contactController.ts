@@ -233,7 +233,7 @@ export const getContact = async (req: Request, res: Response) => {
 
     return res.json({
       ...mapContact(contact),
-      notes
+      internalNotes: notes
     });
   } catch (error) {
     console.error('Erro ao buscar contato:', error);
