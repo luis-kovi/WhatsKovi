@@ -65,7 +65,7 @@ export function ThemeToggle() {
       </button>
 
       {open && (
-        <div className="absolute left-full top-0 z-20 ml-3 w-64 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl transition-all dark:border-slate-700 dark:bg-slate-900">
+        <div className="absolute left-full bottom-0 z-20 ml-3 w-64 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl transition-all dark:border-slate-700 dark:bg-slate-900">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">
             Aparência
           </p>

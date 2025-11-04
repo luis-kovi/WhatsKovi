@@ -63,13 +63,14 @@ export default function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center border-r border-gray-200 bg-white py-6 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-col items-center gap-6">
-        <div className="group relative flex h-11 w-11 items-center justify-center">
+        <div className="group relative flex h-12 w-12 items-center justify-center">
           <Image
             src="/brand/icone.png"
             alt="WhatsKovi"
-            width={44}
-            height={44}
-            className="h-11 w-11 rounded-xl object-contain"
+            width={88}
+            height={88}
+            quality={100}
+            className="h-12 w-12 rounded-2xl object-contain"
             priority
           />
           <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">

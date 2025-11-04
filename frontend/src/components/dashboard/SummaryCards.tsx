@@ -97,7 +97,6 @@ export default function SummaryCards({
 
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 -bottom-4 mx-2 h-1 rounded-full bg-gradient-to-r from-primary/0 via-primary/20 to-primary/0 opacity-40" />
       <div className="overflow-x-auto pb-2">
         <div className="flex min-w-max items-stretch gap-3">
           {metrics.map(({ key, value }) => {
@@ -134,20 +133,23 @@ export default function SummaryCards({
           })}
 
           <div className="relative flex min-w-[220px] flex-col justify-between overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-white/60 px-4 py-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-indigo-400/20 dark:from-indigo-500/20 dark:via-indigo-500/10 dark:to-slate-900">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-indigo-600 shadow-sm ring-1 ring-white dark:bg-slate-800/60 dark:text-indigo-200 dark:ring-slate-700">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-200">
-                    {'Previs\u00e3o 7 dias'}
-                  </p>
-                  <span className="mt-1 block text-xl font-semibold text-indigo-700 dark:text-indigo-100">
-                    {forecastLoading ? '...' : getNumberValue(forecastTotal, loading)}
-                  </span>
-                </div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-indigo-600 shadow-sm ring-1 ring-white dark:bg-slate-800/60 dark:text-indigo-200 dark:ring-slate-700">
+                <Sparkles className="h-4 w-4" />
               </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-200">
+                  {'Tickets previstos'}
+                </p>
+                <span className="mt-1 block text-xl font-semibold text-indigo-700 dark:text-indigo-100">
+                  {forecastLoading ? '...' : getNumberValue(forecastTotal, loading)}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-[11px] text-indigo-600/80 dark:text-indigo-200/80">
+                {'Previs\u00e3o estat\u00edstica'}
+              </p>
               {onRefreshForecast && (
                 <button
                   type="button"
@@ -160,9 +162,6 @@ export default function SummaryCards({
                 </button>
               )}
             </div>
-            <p className="mt-2 text-[11px] text-indigo-600/80 dark:text-indigo-200/80">
-              {'Tickets esperados considerando sazonalidade e comportamento hist\u00f3rico.'}
-            </p>
           </div>
 
           <div className="flex min-w-[200px] flex-col justify-between rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-gray-50 px-4 py-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
