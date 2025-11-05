@@ -1,0 +1,33 @@
+[project]
+name = "whatskovi"
+
+[plugins]
+postgresql = { name = "database" }
+redis = { name = "cache" }
+
+[[services]]
+name = "backend"
+root = "backend"
+[services.backend.environment]
+PORT = "3001"
+NODE_ENV = "production"
+[services.backend.build]
+builder = "NIXPACKS"
+installCommand = "npm install"
+buildCommand = "npm run build"
+[services.backend.deploy]
+startCommand = "npx prisma migrate deploy && npm run start"
+
+[[services]]
+name = "frontend"
+root = "frontend"
+[services.frontend.environment]
+PORT = "3000"
+NODE_ENV = "production"
+NEXT_TELEMETRY_DISABLED = "1"
+[services.frontend.build]
+builder = "NIXPACKS"
+installCommand = "npm install"
+buildCommand = "npm run build"
+[services.frontend.deploy]
+startCommand = "npm run start"
