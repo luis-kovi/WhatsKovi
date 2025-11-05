@@ -16,28 +16,45 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// ✅ CORRIGIDO: Socket.IO CORS
+const buildAllowedOrigins = () => {
+  const defaults = [
+    'http://localhost:3000',
+    'https://whatskovi.vercel.app',
+    /\.vercel\.app$/ // Accept any *.vercel.app
+  ];
+
+  const envOrigins = [
+    process.env.CORS_ORIGIN,
+    process.env.CORS_ORIGINS,
+    process.env.FRONTEND_URL
+  ]
+    .filter((origin): origin is string => Boolean(origin))
+    .flatMap((origin) =>
+      origin
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    );
+
+  return [...defaults, ...envOrigins];
+};
+
+const allowedOrigins = buildAllowedOrigins();
+
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'https://whatskovi.vercel.app',
-      /\.vercel\.app$/ // Aceita qualquer *.vercel.app
-    ],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
 });
 
-// ✅ JÁ ESTÁ CORRETO: Express CORS
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://whatskovi.vercel.app', 
-    /\.vercel\.app$/ // Aceita todos os subdomínios .vercel.app
-  ],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true
+  })
+);
 
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
