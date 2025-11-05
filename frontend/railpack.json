@@ -2,11 +2,11 @@
   "$schema": "https://schema.railpack.com",
   "steps": {
     "install": {
-      "commands": ["npm ci --prefix frontend"]
+      "commands": ["npm ci"]
     },
     "build": {
       "inputs": [{ "step": "install" }],
-      "commands": ["npm run --prefix frontend build"]
+      "commands": ["npm run build"]
     }
   },
   "deploy": {
@@ -16,18 +16,18 @@
     "inputs": [
       {
         "local": true,
-        "include": ["frontend"],
-        "exclude": ["frontend/node_modules", "frontend/.next"]
+        "include": ["."],
+        "exclude": ["node_modules", ".next"]
       },
       {
         "step": "install",
-        "include": ["frontend/node_modules"]
+        "include": ["node_modules"]
       },
       {
         "step": "build",
-        "include": ["frontend/.next"]
+        "include": [".next"]
       }
     ],
-    "startCommand": "cd frontend && npm run start"
+    "startCommand": "npm run start"
   }
 }

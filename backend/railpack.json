@@ -3,13 +3,13 @@
   "steps": {
     "install": {
       "commands": [
-        "npm ci --prefix backend",
-        "npm run --prefix backend prisma:generate"
+        "npm ci",
+        "npm run prisma:generate"
       ]
     },
     "build": {
       "inputs": [{ "step": "install" }],
-      "commands": ["npm run --prefix backend build"]
+      "commands": ["npm run build"]
     }
   },
   "deploy": {
@@ -19,23 +19,23 @@
     "inputs": [
       {
         "local": true,
-        "include": ["backend"],
+        "include": ["."],
         "exclude": [
-          "backend/node_modules",
-          "backend/dist",
-          "backend/.turbo",
-          "backend/.next"
+          "node_modules",
+          "dist",
+          ".turbo",
+          ".next"
         ]
       },
       {
         "step": "install",
-        "include": ["backend/node_modules"]
+        "include": ["node_modules"]
       },
       {
         "step": "build",
-        "include": ["backend/dist"]
+        "include": ["dist"]
       }
     ],
-    "startCommand": "cd backend && npx prisma migrate deploy && npm run start"
+    "startCommand": "npx prisma migrate deploy && npm run start"
   }
 }

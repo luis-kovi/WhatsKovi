@@ -5,35 +5,31 @@ name = "whatskovi"
 postgresql = { name = "database" }
 redis = { name = "cache" }
 
-[services.backend]
+[[services]]
+name = "backend"
 root = "backend"
 
-[services.backend.environment]
-PORT = "3001"
-NODE_ENV = "production"
-RAILPACK_CONFIG_FILE = "backend.railpack.json"
+  [services.environment]
+  PORT = "3001"
+  NODE_ENV = "production"
 
-[services.backend.build]
-builder = "NIXPACKS"
-installCommand = "npm ci --prefix backend"
-buildCommand = "npm run --prefix backend build"
+  [services.build]
+  builder = "NIXPACKS"
 
-[services.backend.deploy]
-startCommand = "cd backend && npx prisma migrate deploy && npm run start"
+  [services.deploy]
+  startCommand = "npx prisma migrate deploy && npm run start"
 
-[services.frontend]
+[[services]]
+name = "frontend"
 root = "frontend"
 
-[services.frontend.environment]
-PORT = "3000"
-NODE_ENV = "production"
-NEXT_TELEMETRY_DISABLED = "1"
-RAILPACK_CONFIG_FILE = "frontend.railpack.json"
+  [services.environment]
+  PORT = "3000"
+  NODE_ENV = "production"
+  NEXT_TELEMETRY_DISABLED = "1"
 
-[services.frontend.build]
-builder = "NIXPACKS"
-installCommand = "npm ci --prefix frontend"
-buildCommand = "npm run --prefix frontend build"
+  [services.build]
+  builder = "NIXPACKS"
 
-[services.frontend.deploy]
-startCommand = "cd frontend && npm run start"
+  [services.deploy]
+  startCommand = "npm run start"
