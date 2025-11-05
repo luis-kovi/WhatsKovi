@@ -37,7 +37,8 @@ const messageInclude = {
       type: true,
       mediaUrl: true,
       createdAt: true,
-      user: { select: { id: true, name: true, avatar: true } }
+      user: { select: { id: true, name: true, avatar: true } },
+      deliveryMetadata: true
     }
   },
   reactions: {
@@ -253,7 +254,7 @@ const findOrCreateTicketForContact = async (options: {
     where: {
       contactId,
       whatsappId,
-      status: { in: [TicketStatus.OPEN, TicketStatus.PENDING] }
+      status: { in: [TicketStatus.BOT, TicketStatus.OPEN, TicketStatus.PENDING] }
     },
     orderBy: { updatedAt: 'desc' }
   });

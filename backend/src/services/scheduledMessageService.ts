@@ -41,7 +41,8 @@ const messageInclude: Prisma.MessageInclude = {
       type: true,
       mediaUrl: true,
       createdAt: true,
-      user: { select: { id: true, name: true, avatar: true } }
+      user: { select: { id: true, name: true, avatar: true } },
+      deliveryMetadata: true
     }
   },
   reactions: {

@@ -73,8 +73,8 @@ const applyFilters = (target: Prisma.ContactWhereInput[], filter?: SegmentFilter
   if (filter.hasOpenTickets !== undefined) {
     target.push(
       filter.hasOpenTickets
-        ? { tickets: { some: { status: { in: ['OPEN', 'PENDING'] } } } }
-        : { tickets: { none: { status: { in: ['OPEN', 'PENDING'] } } } }
+        ? { tickets: { some: { status: { in: ['BOT', 'OPEN', 'PENDING'] } } } }
+        : { tickets: { none: { status: { in: ['BOT', 'OPEN', 'PENDING'] } } } }
     );
   }
   if (filter.queueIds?.length) {

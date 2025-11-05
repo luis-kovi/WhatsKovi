@@ -117,7 +117,7 @@ export const normalizeReportFilters = (input: ReportFiltersInput): ReportFilters
   let status: TicketStatus | undefined;
   if (input.status) {
     const upper = input.status.toUpperCase();
-    if (['PENDING', 'OPEN', 'CLOSED'].includes(upper)) {
+    if (['BOT', 'PENDING', 'OPEN', 'CLOSED'].includes(upper)) {
       status = upper as TicketStatus;
     } else {
       throw new Error('Status de ticket inválido.');

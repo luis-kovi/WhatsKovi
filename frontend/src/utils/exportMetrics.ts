@@ -28,6 +28,7 @@ const buildSummaryRows = (metrics: DashboardMetricsResponse) => [
   ['Total de tickets (período)', formatNumber(metrics.period.totals.created)],
   ['Tickets encerrados', formatNumber(metrics.period.totals.closed)],
   ['Tickets em aberto', formatNumber(metrics.period.totals.open)],
+  ['Tickets em chatbot', formatNumber(metrics.period.totals.bot)],
   ['Tickets pendentes', formatNumber(metrics.period.totals.pending)],
   ['Mensagens trocadas', formatNumber(metrics.period.totals.messages)],
   [

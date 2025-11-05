@@ -36,6 +36,33 @@ export default function NotificationBell() {
     init().catch(() => undefined);
   }, [init]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return;
+    }
+
+    const storageKey = 'whatskovi:notification-permission-requested';
+    let alreadyRequested = false;
+
+    try {
+      alreadyRequested = Boolean(window.localStorage.getItem(storageKey));
+    } catch (error) {
+      console.warn('[Notifications] localStorage unavailable', error);
+    }
+
+    if (Notification.permission === 'default' && !alreadyRequested) {
+      Notification.requestPermission()
+        .catch(() => undefined)
+        .finally(() => {
+          try {
+            window.localStorage.setItem(storageKey, 'true');
+          } catch (error) {
+            console.warn('[Notifications] unable to persist permission flag', error);
+          }
+        });
+    }
+  }, []);
+
   const handleToggle = () => {
     setOpen((prev) => !prev);
   };
@@ -62,7 +89,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute left-full top-0 z-50 ml-3">
+        <div className="fixed bottom-6 left-24 z-50">
           <NotificationPanel onClose={() => setOpen(false)} />
         </div>
       )}

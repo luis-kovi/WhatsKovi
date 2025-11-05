@@ -37,6 +37,7 @@ export interface WhatsAppConnection {
 export interface DashboardSummary {
   tickets: {
     total: number;
+    bot: number;
     pending: number;
     open: number;
     closed: number;

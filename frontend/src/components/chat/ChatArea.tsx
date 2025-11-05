@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import data from '@emoji-mart/data';
 import { format } from 'date-fns';
@@ -20,7 +20,8 @@ import {
   Loader2,
   Sparkles,
   Zap,
-  X
+  X,
+  Car
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
@@ -32,6 +33,7 @@ import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
 import { fetchMultichannelCapabilities, MultichannelCapabilities } from '@/services/multichannel';
+import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 
@@ -278,7 +280,14 @@ export default function ChatArea() {
   } = useMessages({ ticketId: selectedTicket?.id });
 
   const visibleMessages = useMemo(() => messages, [messages]);
-
+  const quotedComposerSource =
+    quotedMessage?.deliveryMetadata && typeof quotedMessage.deliveryMetadata['source'] === 'string'
+      ? (quotedMessage.deliveryMetadata['source'] as string)
+      : undefined;
+  const quotedComposerAuthor =
+    (quotedComposerSource ?? '').toUpperCase() === 'CHATBOT'
+      ? 'KOVINHO 🤖'
+      : selectedTicket?.contact.name ?? 'Contato';
 
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -302,6 +311,67 @@ export default function ChatArea() {
   const [editingBody, setEditingBody] = useState('');
   const [editingPrivate, setEditingPrivate] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [isCarPlateEditorOpen, setCarPlateEditorOpen] = useState(false);
+  const [carPlateInput, setCarPlateInput] = useState('');
+  const [carPlateError, setCarPlateError] = useState<string | null>(null);
+  const [carPlateSaving, setCarPlateSaving] = useState(false);
+
+  const openCarPlateEditor = useCallback(() => {
+    if (!selectedTicket) return;
+    const initialValue = selectedTicket.carPlate ? normalizeCarPlate(selectedTicket.carPlate) : '';
+    setCarPlateInput(initialValue);
+    setCarPlateError(null);
+    setCarPlateEditorOpen(true);
+  }, [selectedTicket]);
+
+  const closeCarPlateEditor = useCallback(() => {
+    setCarPlateEditorOpen(false);
+    setCarPlateError(null);
+  }, []);
+
+  const handleCarPlateInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = normalizeCarPlate(event.target.value);
+    setCarPlateInput(value);
+    if (carPlateError) {
+      setCarPlateError(null);
+    }
+  };
+
+  const handleCarPlateSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedTicket) return;
+
+    const normalized = normalizeCarPlate(carPlateInput);
+
+    if (normalized && !isValidCarPlate(normalized)) {
+      setCarPlateError('Placa inválida. Use o formato ABC1D23.');
+      return;
+    }
+
+    const existing = selectedTicket.carPlate ?? '';
+    if (!normalized && !existing) {
+      closeCarPlateEditor();
+      return;
+    }
+
+    if (normalized === existing) {
+      closeCarPlateEditor();
+      return;
+    }
+
+    setCarPlateSaving(true);
+    try {
+      await updateTicketDetails(selectedTicket.id, { carPlate: normalized || null });
+      toast.success(normalized ? 'Placa do carro atualizada.' : 'Placa do carro removida.');
+      closeCarPlateEditor();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível atualizar a placa do carro.';
+      setCarPlateError(message);
+      toast.error(message);
+    } finally {
+      setCarPlateSaving(false);
+    }
+  };
 
   const contactEmail = selectedTicket?.contact.email?.trim() ?? '';
 
@@ -692,7 +762,17 @@ export default function ChatArea() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      
+      const options: MediaRecorderOptions = {};
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        options.mimeType = 'audio/ogg;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        options.mimeType = 'audio/webm';
+      }
+      
+      const recorder = new MediaRecorder(stream, options);
 
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
@@ -723,14 +803,7 @@ export default function ChatArea() {
           return;
         }
 
-        const extension = mimeType.includes('ogg')
-          ? 'ogg'
-          : mimeType.includes('mp3')
-          ? 'mp3'
-          : mimeType.includes('wav')
-          ? 'wav'
-          : 'webm';
-
+        const extension = mimeType.includes('ogg') ? 'ogg' : 'webm';
         const audioFile = new File([blob], `audio-${Date.now()}.${extension}`, { type: mimeType });
 
         setUploadingFile(true);
@@ -1113,6 +1186,9 @@ export default function ChatArea() {
   useEffect(() => {
     if (!selectedTicket) {
       setExportModalOpen(false);
+      setCarPlateEditorOpen(false);
+      setCarPlateError(null);
+      setCarPlateInput('');
     }
   }, [selectedTicket]);
 
@@ -1288,7 +1364,33 @@ export default function ChatArea() {
             Exportar
           </button>
 
-          {selectedTicket.status === 'PENDING' && (
+          <div className='group relative'>
+            <button
+              type='button'
+              onClick={openCarPlateEditor}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                selectedTicket.carPlate
+                  ? `border-emerald-500 bg-emerald-50 text-emerald-700${
+                      isCarPlateEditorOpen ? '' : ' animate-pulse hover:animate-none'
+                    }`
+                  : 'border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary'
+              }`}
+              aria-label={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
+            >
+              <Car size={14} />
+              {selectedTicket.carPlate ? (
+                <span className='font-mono text-xs uppercase tracking-wider'>{selectedTicket.carPlate}</span>
+              ) : (
+                <span className='text-[11px] font-semibold'>Adicionar placa</span>
+              )}
+            </button>
+            <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+              {selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
+              <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+            </div>
+          </div>
+
+          {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
             <button
               onClick={handleAcceptTicket}
               className='rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90'
@@ -1390,10 +1492,18 @@ export default function ChatArea() {
           </div>
         ) : (
           visibleMessages.map((message) => {
-            const isFromAgent = Boolean(message.userId);
-            const author = message.user?.name ?? selectedTicket.contact.name;
+            const metadata = (message.deliveryMetadata ?? null) as Record<string, unknown> | null;
+            const source =
+              metadata && typeof metadata['source'] === 'string'
+                ? (metadata['source'] as string)
+                : undefined;
+            const isBotMessage = (source ?? '').toUpperCase() === 'CHATBOT';
+            const isFromAgent = isBotMessage || Boolean(message.userId);
+            const author = isBotMessage
+              ? 'KOVINHO 🤖'
+              : message.user?.name ?? selectedTicket.contact.name;
             const isOwner = Boolean(message.userId && message.userId === currentUserId);
-            const canModify = isOwner || Boolean(isAdmin);
+            const canModify = !isBotMessage && (isOwner || Boolean(isAdmin));
             const hasBody = Boolean(message.body && message.body.trim().length > 0);
             const isTextual = hasBody && ['TEXT', 'NOTE'].includes(message.type);
             const canEdit = Boolean(canModify && isTextual);
@@ -1409,6 +1519,7 @@ export default function ChatArea() {
                 contactName={selectedTicket.contact.name}
                 currentUserId={currentUserId ?? undefined}
                 isFromAgent={isFromAgent}
+                isFromBot={isBotMessage}
                 reactionPalette={reactionPalette}
                 onQuote={handleQuoteMessage}
                 onToggleReaction={handleToggleReaction}
@@ -1465,7 +1576,7 @@ export default function ChatArea() {
           <div className='mb-3 flex items-start justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-primary'>
             <div className='pr-4'>
               <p className='font-semibold'>
-                {quotedMessage.user?.name ?? selectedTicket.contact.name}
+                {quotedMessage.user?.name ?? quotedComposerAuthor}
               </p>
               <p className='mt-1 opacity-80'>
                 {quotedMessage.body || (quotedMessage.mediaUrl ? 'Midia anexada' : 'Mensagem sem texto')}
@@ -1730,6 +1841,66 @@ export default function ChatArea() {
           onClose={handleCancelDelete}
           onConfirm={handleConfirmDelete}
         />
+      )}
+
+      {isCarPlateEditorOpen && selectedTicket && (
+        <div className='fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4'>
+          <div className='w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl'>
+            <div className='mb-4 flex items-center justify-between'>
+              <div className='flex items-center gap-2'>
+                <div className='flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary'>
+                  <Car size={18} />
+                </div>
+                <div>
+                  <p className='text-sm font-semibold text-gray-900'>Placa do veículo</p>
+                  <p className='text-xs text-gray-500'>Associe ou atualize a placa vinculada ao ticket.</p>
+                </div>
+              </div>
+              <button
+                type='button'
+                onClick={closeCarPlateEditor}
+                className='rounded-lg p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30'
+                aria-label='Fechar editor de placa'
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleCarPlateSubmit} className='space-y-4'>
+              <div>
+                <label className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Placa do carro</label>
+                <input
+                  type='text'
+                  value={carPlateInput}
+                  onChange={handleCarPlateInputChange}
+                  placeholder='ABC1D23'
+                  maxLength={7}
+                  autoFocus
+                  className='mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase tracking-widest focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30'
+                />
+                <p className='mt-1 text-[11px] text-gray-500'>Use o padrão Mercosul (ABC1D23). Deixe vazio para remover.</p>
+              </div>
+              {carPlateError && <p className='text-sm text-rose-500'>{carPlateError}</p>}
+              <div className='flex justify-end gap-2'>
+                <button
+                  type='button'
+                  onClick={closeCarPlateEditor}
+                  className='rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100'
+                  disabled={carPlateSaving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type='submit'
+                  disabled={carPlateSaving}
+                  className='inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60'
+                >
+                  {carPlateSaving ? <Loader2 className='h-4 w-4 animate-spin' /> : <Car size={14} />}
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {selectedTicket && (

@@ -7,6 +7,7 @@ import {
   MoreVertical,
   Paperclip,
   Pencil,
+  Reply,
   Smartphone,
   StickyNote,
   Trash2,
@@ -106,6 +107,7 @@ type MessageItemProps = {
   contactName: string;
   currentUserId?: string;
   isFromAgent: boolean;
+  isFromBot?: boolean;
   reactionPalette: string[];
   onQuote: (message: TicketMessage) => void;
   onToggleReaction: (message: TicketMessage, emoji: string) => void;
@@ -125,7 +127,9 @@ export function MessageItem({
   contactName,
   currentUserId,
   isFromAgent,
+  isFromBot = false,
   reactionPalette,
+  onQuote,
   onToggleReaction,
   onToggleMenu,
   onEdit,
@@ -146,7 +150,7 @@ export function MessageItem({
     ? primaryReactionGroup.reactions.filter((reaction) => reaction.userId !== currentUserId).length
     : 0;
   const agentHasReacted = userReactions.has(primaryReactionEmoji);
-  const shouldShowOutboundReaction = isFromAgent && primaryReactionFromOthers > 0;
+  const shouldShowOutboundReaction = isFromAgent && !isFromBot && primaryReactionFromOthers > 0;
   const isPrivateNote = Boolean(message.isPrivate);
   const shouldShowInboundReactionButton = !isFromAgent && !isPrivateNote;
 
@@ -156,20 +160,23 @@ export function MessageItem({
   const isDarkTheme = isPrivateNote || isFromAgent;
   const bubbleBackgroundClass = isPrivateNote
     ? 'text-white'
+    : isFromBot
+    ? 'text-white'
     : isFromAgent
     ? 'bg-primary text-white'
     : 'bg-white text-gray-800';
-  const bubbleBorderClass = isPrivateNote
-    ? ''
-    : isFromAgent
-    ? ''
-    : 'border border-gray-100';
+  const bubbleBorderClass = isPrivateNote || isFromAgent ? '' : 'border border-gray-100';
+  const bubbleCustomStyle = isPrivateNote
+    ? { backgroundColor: '#f58a32' }
+    : isFromBot
+    ? { backgroundColor: '#7ca5f8' }
+    : undefined;
 
   const quoteClasses = isDarkTheme
     ? 'border-white/30 bg-white/10 text-white'
     : 'border-primary/10 bg-primary/5 text-primary';
 
-  const showMenuButton = isFromAgent && (canEdit || canDelete) && Boolean(onToggleMenu);
+  const showMenuButton = isFromAgent && !isFromBot && (canEdit || canDelete) && Boolean(onToggleMenu);
   const bubbleHighlightClass = isHighlighted
     ? isDarkTheme
       ? 'ring-2 ring-white/70 shadow-lg'
@@ -197,12 +204,20 @@ export function MessageItem({
         })()
       : null;
 
+  const quotedMetadata = message.quotedMessage?.deliveryMetadata as Record<string, unknown> | null;
+  const quotedSource =
+    quotedMetadata && typeof quotedMetadata['source'] === 'string'
+      ? (quotedMetadata['source'] as string)
+      : undefined;
+  const quotedFallbackAuthor =
+    (quotedSource ?? '').toUpperCase() === 'CHATBOT' ? 'KOVINHO 🤖' : contactName;
+
   return (
     <div className={`flex ${isFromAgent ? 'justify-end' : 'justify-start'}`} data-message-id={message.id}>
       <div className="relative flex flex-col max-w-[70%]">
         <div
           className={`group relative rounded-2xl px-4 py-3 shadow-sm transition ${bubbleBackgroundClass} ${bubbleBorderClass} ${bubbleHighlightClass}`}
-          style={isPrivateNote ? { backgroundColor: '#f58a32' } : undefined}
+          style={bubbleCustomStyle}
         >
         <div className="mb-1 flex items-start justify-between gap-2">
           <span className={`text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap ${isDarkTheme ? 'text-white/80' : 'text-gray-500'}`}>{author}</span>
@@ -252,7 +267,9 @@ export function MessageItem({
             }}
             className={`mb-2 w-full rounded-lg border px-3 py-2 text-left text-xs transition ${quoteClasses} hover:opacity-80`}
           >
-            <p className="font-semibold">{message.quotedMessage.user?.name ?? contactName}</p>
+            <p className="font-semibold">
+              {message.quotedMessage.user?.name ?? quotedFallbackAuthor}
+            </p>
             <p className="mt-1 opacity-80">
               {message.quotedMessage.body ||
                 (message.quotedMessage.mediaUrl ? 'Midia anexada' : 'Mensagem sem texto')}
@@ -316,18 +333,30 @@ export function MessageItem({
           </div>
         )}
         </div>
-        {shouldShowInboundReactionButton && (
-          <button
-            type="button"
-            aria-label="Curtir mensagem"
-            onClick={handlePrimaryReaction}
-            className={`mt-1 flex h-6 w-6 items-center justify-center rounded-full border transition ${
-              agentHasReacted ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-primary'
-            }`}
-          >
-            <ThumbsUp size={12} />
-          </button>
-        )}
+        <div className="mt-1 flex items-center gap-1">
+          {!isFromAgent && !isPrivateNote && (
+            <button
+              type="button"
+              aria-label="Responder mensagem"
+              onClick={() => onQuote(message)}
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition hover:bg-gray-50 hover:text-primary"
+            >
+              <Reply size={12} />
+            </button>
+          )}
+          {shouldShowInboundReactionButton && (
+            <button
+              type="button"
+              aria-label="Curtir mensagem"
+              onClick={handlePrimaryReaction}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                agentHasReacted ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-primary'
+              }`}
+            >
+              <ThumbsUp size={12} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

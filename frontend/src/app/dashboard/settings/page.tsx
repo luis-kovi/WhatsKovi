@@ -34,7 +34,15 @@ const DEFAULT_SERVICE_SETTINGS: ServiceSettingsValues = {
   globalTicketLimit: 400,
   perAgentTicketLimit: 25,
   soundEnabled: true,
-  satisfactionSurveyEnabled: true
+  satisfactionSurveyEnabled: true,
+  aiEnabled: false,
+  aiRoutingEnabled: true,
+  aiProvider: 'OPENAI',
+  aiModel: 'gpt-4o-mini',
+  aiConfidenceThreshold: 0.65,
+  aiFallbackQueueId: '',
+  aiGeminiApiKey: '',
+  aiOpenAiApiKey: ''
 };
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettingsValues = {
@@ -155,7 +163,15 @@ export default function SettingsPage() {
       globalTicketLimit: service.globalTicketLimit,
       perAgentTicketLimit: service.perAgentTicketLimit,
       soundEnabled: service.soundEnabled,
-      satisfactionSurveyEnabled: service.satisfactionSurveyEnabled
+      satisfactionSurveyEnabled: service.satisfactionSurveyEnabled,
+      aiEnabled: service.aiEnabled ?? false,
+      aiRoutingEnabled: service.aiRoutingEnabled ?? false,
+      aiProvider: service.aiProvider ?? 'OPENAI',
+      aiModel: service.aiModel ?? '',
+      aiConfidenceThreshold: service.aiConfidenceThreshold ?? 0.65,
+      aiFallbackQueueId: service.aiFallbackQueueId ?? '',
+      aiGeminiApiKey: service.aiGeminiApiKey ?? '',
+      aiOpenAiApiKey: service.aiOpenAiApiKey ?? ''
     });
   }, [service]);
 
@@ -259,7 +275,18 @@ export default function SettingsPage() {
 
   const handleServiceSave = async () => {
     if (!serviceSettings) return;
-    const result = await saveService(serviceSettings);
+    const payload = {
+      ...serviceSettings,
+      aiModel: serviceSettings.aiModel.trim() || null,
+      aiConfidenceThreshold: Math.min(
+        Math.max(serviceSettings.aiConfidenceThreshold ?? 0.65, 0.3),
+        1
+      ),
+      aiFallbackQueueId: serviceSettings.aiFallbackQueueId || null,
+      aiGeminiApiKey: serviceSettings.aiGeminiApiKey.trim() || null,
+      aiOpenAiApiKey: serviceSettings.aiOpenAiApiKey.trim() || null
+    };
+    const result = await saveService(payload);
     if (result) {
       toast.success(t('settings.toasts.serviceSaved'));
     } else {
@@ -433,6 +460,7 @@ export default function SettingsPage() {
 
           <ServiceSettingsForm
             values={serviceSettings}
+            queues={queues}
             onChange={handleServiceChange}
             onSave={handleServiceSave}
             saving={savingService}

@@ -2,6 +2,57 @@ export type ChatbotTriggerType = 'KEYWORD' | 'DEFAULT' | 'MANUAL';
 
 export type ChatbotNodeType = 'message' | 'question' | 'input' | 'transfer' | 'end';
 
+export type ChatbotAiProvider = 'OPENAI' | 'GEMINI' | 'HYBRID';
+
+export interface ChatbotAiModel {
+  name: string;
+  provider: ChatbotAiProvider;
+  description?: string;
+  maxTokens?: number;
+}
+
+export interface ChatbotAiConfig {
+  provider: ChatbotAiProvider;
+  temperature: number;
+  topP?: number;
+  defaultModel: string;
+  availableModels: ChatbotAiModel[];
+  fallbackQueueId?: string | null;
+  fallbackChannel?: string | null;
+  lastTrainedAt?: string | null;
+  enabled: boolean;
+  confidenceThreshold?: number | null;
+}
+
+export type ChatbotAiMessageRole = 'CONTACT' | 'BOT' | 'SYSTEM';
+
+export interface ChatbotAiMessage {
+  role: ChatbotAiMessageRole;
+  content: string;
+  timestamp?: string;
+}
+
+export interface ChatbotAiRoutingRequest {
+  transcript: ChatbotAiMessage[];
+  channel?: string;
+  metadata?: Record<string, unknown>;
+  desiredOutcome?: 'ROUTE' | 'TRIAGE' | 'SUGGESTION';
+}
+
+export interface ChatbotAiRoutingResult {
+  queue?: { id: string; name: string } | null;
+  channel?: string | null;
+  confidence: number;
+  reasons: string[];
+  tags: string[];
+  sentiment?: 'positive' | 'neutral' | 'negative';
+  summary?: string;
+  model: string;
+  createdAt: string;
+  followUp?: string;
+  escalationRecommended?: boolean;
+}
+
 export interface ChatbotQuestionOption {
   id?: string;
   value: string;

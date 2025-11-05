@@ -116,6 +116,17 @@ const buildInitialState = (flow?: ChatbotFlow | null): FormState => {
   const { definition } = flow;
   const nodes = definition?.nodes ?? [];
   const entryNodeId = definition?.entryNodeId ?? nodes[0]?.id ?? createDefaultNode().id;
+  const normalizedNodes: FormNode[] =
+    nodes.length > 0
+      ? (nodes.map((node) =>
+          node.type === 'transfer'
+            ? ({
+                ...node,
+                next: null
+              } as FormNode)
+            : (node as FormNode)
+        ) as FormNode[])
+      : [createDefaultNode()];
 
   const scheduleDays = defaultSchedule();
   if (flow.schedule?.windows) {
@@ -137,7 +148,7 @@ const buildInitialState = (flow?: ChatbotFlow | null): FormState => {
     isPrimary: flow.isPrimary,
     keywordsInput: (flow.keywords ?? []).join(', '),
     entryNodeId,
-    nodes: nodes.length > 0 ? nodes : [createDefaultNode()],
+    nodes: normalizedNodes,
     offlineMessage: flow.offlineMessage ?? '',
     transferQueueId: flow.transferQueueId ?? undefined,
     schedule: {
@@ -316,6 +327,15 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
           }
         : null;
 
+    const definitionNodes: ChatbotNode[] = form.nodes.map((node) =>
+      node.type === 'transfer'
+        ? ({
+            ...node,
+            next: null
+          } as ChatbotNode)
+        : (node as ChatbotNode)
+    );
+
     const payload: ChatbotFlowPayload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -326,7 +346,7 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
       entryNodeId: form.entryNodeId,
       definition: {
         entryNodeId: form.entryNodeId,
-        nodes: form.nodes
+        nodes: definitionNodes
       },
       schedule,
       offlineMessage: form.offlineMessage.trim() || null,
@@ -374,8 +394,7 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
                   const baseNode = {
                     id: existing.id,
                     label: existing.label,
-                    metadata: existing.metadata,
-                    next: existing.next ?? null
+                    metadata: existing.metadata
                   };
                   let newNode: FormNode;
                   if (newType === 'question') {
@@ -401,7 +420,8 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
                           : 'Nao entendi sua resposta. Pode escolher uma opcao valida?',
                       allowFreeText: isQuestionNode(existing) ? existing.allowFreeText ?? false : false,
                       storeField: isQuestionNode(existing) ? existing.storeField : undefined,
-                      defaultNext: isQuestionNode(existing) ? existing.defaultNext ?? null : null
+                      defaultNext: isQuestionNode(existing) ? existing.defaultNext ?? null : null,
+                      next: isQuestionNode(existing) ? existing.next ?? null : null
                     };
                   } else if (newType === 'input') {
                     newNode = {
@@ -414,7 +434,8 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
                           ? existing.validation
                           : { type: 'text', minLength: 1 },
                       storeField: isInputNode(existing) ? existing.storeField : undefined,
-                      nextOnFail: isInputNode(existing) ? existing.nextOnFail ?? null : null
+                      nextOnFail: isInputNode(existing) ? existing.nextOnFail ?? null : null,
+                      next: isInputNode(existing) ? existing.next ?? null : null
                     };
                   } else if (newType === 'transfer') {
                     newNode = {
@@ -425,7 +446,8 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
                         : 'Vou transferir seu atendimento agora.',
                       queueId: isTransferNode(existing) ? existing.queueId ?? null : null,
                       mode: isTransferNode(existing) ? existing.mode : undefined,
-                      agentId: isTransferNode(existing) ? existing.agentId ?? null : null
+                      agentId: isTransferNode(existing) ? existing.agentId ?? null : null,
+                      next: null
                     };
                   } else if (newType === 'end') {
                     newNode = {
@@ -441,7 +463,8 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
                       ...baseNode,
                       type: 'message',
                       content: isMessageNode(existing) ? existing.content : 'Mensagem do bot.',
-                      quickReplies: isMessageNode(existing) ? existing.quickReplies : undefined
+                      quickReplies: isMessageNode(existing) ? existing.quickReplies : undefined,
+                      next: isMessageNode(existing) ? existing.next ?? null : null
                     };
                   }
                   updatedNodes[nodeIndex] = newNode;
@@ -742,7 +765,7 @@ export function FlowEditor({ flow, queues, mode, saving, onSave, onDelete, onCan
             </div>
           )}
 
-          {!isQuestionNode(node) && !isEndNode(node) && (
+          {!isQuestionNode(node) && !isEndNode(node) && !isTransferNode(node) && (
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                 Proximo no

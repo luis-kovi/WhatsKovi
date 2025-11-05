@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Toggle from './Toggle';
 import { useI18n } from '@/providers/I18nProvider';
+import type { Queue } from '@/store/metadataStore';
 
 export type ServiceSettingsValues = {
   inactivityMinutes: number;
@@ -12,18 +13,40 @@ export type ServiceSettingsValues = {
   perAgentTicketLimit: number;
   soundEnabled: boolean;
   satisfactionSurveyEnabled: boolean;
+  aiEnabled: boolean;
+  aiRoutingEnabled: boolean;
+  aiProvider: 'OPENAI' | 'GEMINI' | 'HYBRID';
+  aiModel: string;
+  aiConfidenceThreshold: number;
+  aiFallbackQueueId: string;
+  aiGeminiApiKey: string;
+  aiOpenAiApiKey: string;
 };
 
 type ServiceSettingsFormProps = {
   values: ServiceSettingsValues;
+  queues?: Queue[];
   onChange: <Key extends keyof ServiceSettingsValues>(key: Key, value: ServiceSettingsValues[Key]) => void;
   onSave: () => void;
   saving: boolean;
 };
 
-export default function ServiceSettingsForm({ values, onChange, onSave, saving }: ServiceSettingsFormProps) {
+export default function ServiceSettingsForm({
+  values,
+  queues,
+  onChange,
+  onSave,
+  saving
+}: ServiceSettingsFormProps) {
   const [showPreview, setShowPreview] = useState(false);
+  const [showGeminiToken, setShowGeminiToken] = useState(false);
+  const [showOpenAiToken, setShowOpenAiToken] = useState(false);
   const { t } = useI18n();
+
+  const fallbackQueueName = useMemo(() => {
+    if (!queues || !values.aiFallbackQueueId) return null;
+    return queues.find((queue) => queue.id === values.aiFallbackQueueId)?.name ?? null;
+  }, [queues, values.aiFallbackQueueId]);
 
   return (
     <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -140,6 +163,145 @@ export default function ServiceSettingsForm({ values, onChange, onSave, saving }
             )}
           </div>
         </div>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">IA de Atendimento</p>
+            <h3 className="text-sm font-semibold text-gray-900">Orquestrador com Gemini e ChatGPT</h3>
+            <p className="text-xs text-gray-500">
+              Ative a IA para classificar conversas automaticamente e direcionar clientes para a fila correta.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <Toggle
+              label="Ativar IA"
+              description="Permite que o chatbot utilize modelos generativos."
+              checked={values.aiEnabled}
+              onChange={(checked) => onChange('aiEnabled', checked)}
+            />
+            <Toggle
+              label="Roteamento inteligente"
+              description="Direciona conversas automaticamente para filas ou canais."
+              checked={values.aiRoutingEnabled}
+              onChange={(checked) => onChange('aiRoutingEnabled', checked)}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Provedor
+            <select
+              value={values.aiProvider}
+              onChange={(event) => onChange('aiProvider', event.target.value as ServiceSettingsValues['aiProvider'])}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              disabled={!values.aiEnabled}
+            >
+              <option value="OPENAI">ChatGPT (OpenAI)</option>
+              <option value="GEMINI">Gemini (Google)</option>
+              <option value="HYBRID">Hibrido</option>
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Modelo preferencial
+            <input
+              type="text"
+              value={values.aiModel}
+              disabled={!values.aiEnabled}
+              onChange={(event) => onChange('aiModel', event.target.value)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:bg-gray-100 disabled:text-gray-400"
+              placeholder={values.aiProvider === 'GEMINI' ? 'gemini-1.5-flash' : 'gpt-4o-mini'}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Precisao minima
+            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
+              <input
+                type="range"
+                min={0.4}
+                max={0.95}
+                step={0.05}
+                value={values.aiConfidenceThreshold}
+                disabled={!values.aiEnabled}
+                onChange={(event) => onChange('aiConfidenceThreshold', Number(event.target.value))}
+                className="h-2 flex-1 cursor-pointer accent-primary"
+              />
+              <span className="text-xs font-semibold text-gray-700">
+                {Math.round(values.aiConfidenceThreshold * 100)}%
+              </span>
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Fila de fallback
+            <select
+              value={values.aiFallbackQueueId}
+              disabled={!values.aiRoutingEnabled}
+              onChange={(event) => onChange('aiFallbackQueueId', event.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              <option value="">{fallbackQueueName ? `Atual: ${fallbackQueueName}` : 'Selecione uma fila'}</option>
+              {queues?.map((queue) => (
+                <option key={queue.id} value={queue.id}>
+                  {queue.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Token ChatGPT
+            <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+              <input
+                type={showOpenAiToken ? 'text' : 'password'}
+                value={values.aiOpenAiApiKey}
+                disabled={!values.aiEnabled || (values.aiProvider === 'GEMINI')}
+                onChange={(event) => onChange('aiOpenAiApiKey', event.target.value)}
+                className="flex-1 text-sm text-gray-700 focus:outline-none"
+                placeholder="sk-..."
+              />
+              <button
+                type="button"
+                onClick={() => setShowOpenAiToken((prev) => !prev)}
+                className="text-xs font-semibold text-primary"
+              >
+                {showOpenAiToken ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase text-gray-500">
+            Token Gemini
+            <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+              <input
+                type={showGeminiToken ? 'text' : 'password'}
+                value={values.aiGeminiApiKey}
+                disabled={!values.aiEnabled || (values.aiProvider === 'OPENAI')}
+                onChange={(event) => onChange('aiGeminiApiKey', event.target.value)}
+                className="flex-1 text-sm text-gray-700 focus:outline-none"
+                placeholder="AIza..."
+              />
+              <button
+                type="button"
+                onClick={() => setShowGeminiToken((prev) => !prev)}
+                className="text-xs font-semibold text-primary"
+              >
+                {showGeminiToken ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
+          </label>
+        </div>
+
+        <p className="rounded-lg border border-primary/20 bg-white/70 px-3 py-2 text-[11px] text-primary">
+          Os tokens sao armazenados de forma segura e utilizados apenas para requisoes de IA durante o
+          roteamento e conversas do chatbot.
+        </p>
       </div>
     </section>
   );

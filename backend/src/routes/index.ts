@@ -139,6 +139,11 @@ import {
   regenerateSuggestionsHandler
 } from '../controllers/aiController';
 import {
+  evaluateChatbotAiRoutingHandler,
+  getChatbotAiConfigHandler,
+  updateChatbotAiConfigHandler
+} from '../controllers/chatbotAiController';
+import {
   listCampaignController,
   getCampaignController,
   createCampaignController,
@@ -324,6 +329,10 @@ router.put('/chatbot/flows/:id', authMiddleware, adminOnly, updateChatbotFlow);
 router.delete('/chatbot/flows/:id', authMiddleware, adminOnly, deleteChatbotFlow);
 router.get('/chatbot/flows/:id/stats', authMiddleware, adminOnly, getChatbotFlowStats);
 router.post('/chatbot/flows/:id/test', authMiddleware, adminOnly, testChatbotFlow);
+
+router.get('/chatbot/ai/config', authMiddleware, getChatbotAiConfigHandler);
+router.put('/chatbot/ai/config', authMiddleware, adminOnly, updateChatbotAiConfigHandler);
+router.post('/chatbot/ai/route', authMiddleware, evaluateChatbotAiRoutingHandler);
 
 // Automations
 router.get('/automations', authMiddleware, adminOnly, listAutomationRules);

@@ -21,6 +21,14 @@ export type ServiceSettingsPayload = {
   perAgentTicketLimit: number;
   soundEnabled: boolean;
   satisfactionSurveyEnabled: boolean;
+  aiEnabled: boolean;
+  aiRoutingEnabled: boolean;
+  aiProvider: 'OPENAI' | 'GEMINI' | 'HYBRID';
+  aiModel?: string | null;
+  aiConfidenceThreshold?: number | null;
+  aiFallbackQueueId?: string | null;
+  aiGeminiApiKey?: string | null;
+  aiOpenAiApiKey?: string | null;
 };
 
 export type NotificationSettingsPayload = {
@@ -81,6 +89,14 @@ const DEFAULT_SETTINGS: Omit<AdvancedSettings, 'id' | 'createdAt' | 'updatedAt' 
   perAgentTicketLimit: 25,
   soundEnabled: true,
   satisfactionSurveyEnabled: true,
+  aiEnabled: false,
+  aiRoutingEnabled: false,
+  aiProvider: 'OPENAI',
+  aiModel: 'gpt-4o-mini',
+  aiConfidenceThreshold: 0.6,
+  aiFallbackQueueId: null,
+  aiGeminiApiKey: null,
+  aiOpenAiApiKey: null,
   notifyNewTicket: true,
   notifyTicketMessage: true,
   notifyTransfer: true,
@@ -175,7 +191,15 @@ const mapToResponse = (settings: AdvancedSettings): AdvancedSettingsResponse => 
     globalTicketLimit: settings.globalTicketLimit,
     perAgentTicketLimit: settings.perAgentTicketLimit,
     soundEnabled: settings.soundEnabled,
-    satisfactionSurveyEnabled: settings.satisfactionSurveyEnabled
+    satisfactionSurveyEnabled: settings.satisfactionSurveyEnabled,
+    aiEnabled: settings.aiEnabled,
+    aiRoutingEnabled: settings.aiRoutingEnabled,
+    aiProvider: settings.aiProvider as ServiceSettingsPayload['aiProvider'],
+    aiModel: settings.aiModel ?? null,
+    aiConfidenceThreshold: settings.aiConfidenceThreshold ?? 0.6,
+    aiFallbackQueueId: settings.aiFallbackQueueId ?? null,
+    aiGeminiApiKey: settings.aiGeminiApiKey ?? null,
+    aiOpenAiApiKey: settings.aiOpenAiApiKey ?? null
   },
   notifications: {
     notifyNewTicket: settings.notifyNewTicket,
@@ -249,6 +273,38 @@ export const updateServiceSettings = async (
       : current.autoCloseMessage;
   const globalTicketLimit = normalizeInt(payload.globalTicketLimit, current.globalTicketLimit, 1);
   const perAgentTicketLimit = normalizeInt(payload.perAgentTicketLimit, current.perAgentTicketLimit, 1);
+  const aiProvider: ServiceSettingsPayload['aiProvider'] =
+    payload.aiProvider && ['OPENAI', 'GEMINI', 'HYBRID'].includes(payload.aiProvider)
+      ? payload.aiProvider
+      : (current.aiProvider as ServiceSettingsPayload['aiProvider']) ?? 'OPENAI';
+  const aiModel =
+    payload.aiModel === null
+      ? null
+      : typeof payload.aiModel === 'string'
+        ? payload.aiModel.trim().slice(0, 120) || null
+        : current.aiModel;
+  const aiConfidenceThreshold =
+    typeof payload.aiConfidenceThreshold === 'number' && Number.isFinite(payload.aiConfidenceThreshold)
+      ? Math.min(Math.max(payload.aiConfidenceThreshold, 0.05), 0.99)
+      : current.aiConfidenceThreshold ?? 0.6;
+  const aiFallbackQueueId =
+    payload.aiFallbackQueueId === null
+      ? null
+      : typeof payload.aiFallbackQueueId === 'string'
+        ? payload.aiFallbackQueueId.trim() || null
+        : current.aiFallbackQueueId;
+  const normalizedGemini =
+    payload.aiGeminiApiKey === null
+      ? null
+      : typeof payload.aiGeminiApiKey === 'string'
+        ? payload.aiGeminiApiKey.trim()
+        : undefined;
+  const normalizedOpenAi =
+    payload.aiOpenAiApiKey === null
+      ? null
+      : typeof payload.aiOpenAiApiKey === 'string'
+        ? payload.aiOpenAiApiKey.trim()
+        : undefined;
 
   const updated = await prisma.advancedSettings.update({
     where: { id: current.id },
@@ -260,6 +316,18 @@ export const updateServiceSettings = async (
       perAgentTicketLimit,
       soundEnabled: Boolean(payload.soundEnabled),
       satisfactionSurveyEnabled: Boolean(payload.satisfactionSurveyEnabled),
+      aiEnabled: Boolean(payload.aiEnabled),
+      aiRoutingEnabled: Boolean(payload.aiRoutingEnabled),
+      aiProvider,
+      aiModel,
+      aiConfidenceThreshold,
+      aiFallbackQueueId,
+      ...(normalizedGemini !== undefined
+        ? { aiGeminiApiKey: normalizedGemini && normalizedGemini.length > 0 ? normalizedGemini : null }
+        : {}),
+      ...(normalizedOpenAi !== undefined
+        ? { aiOpenAiApiKey: normalizedOpenAi && normalizedOpenAi.length > 0 ? normalizedOpenAi : null }
+        : {}),
       updatedById: userId ?? null
     }
   });
@@ -366,3 +434,5 @@ export const persistBrandingLogo = async (
 
   return updateBrandingLogo(storageKey, userId);
 };
+
+export const ensureAdvancedSettingsRecord = ensureSettings;

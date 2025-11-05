@@ -45,6 +45,7 @@ export type DashboardMetricsResponse = {
       created: number;
       closed: number;
       open: number;
+      bot: number;
       pending: number;
       messages: number;
     };

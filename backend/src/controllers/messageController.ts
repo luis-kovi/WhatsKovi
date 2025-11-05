@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs/promises";
 import prisma from "../config/database";
 import { AuthRequest } from "../middleware/auth";
-import { sendWhatsAppMessage } from "../services/whatsappService";
+import { reactToWhatsAppMessage, sendWhatsAppMessage } from "../services/whatsappService";
 import { applyAutomaticTagsToTicket } from "../services/tagAutomation";
 import { processMessageWithAi } from "../services/aiOrchestrator";
 import { io } from "../server";
@@ -39,7 +39,8 @@ const messageInclude: Prisma.MessageInclude = {
       type: true,
       mediaUrl: true,
       createdAt: true,
-      user: { select: { id: true, name: true, avatar: true } }
+      user: { select: { id: true, name: true, avatar: true } },
+      deliveryMetadata: true
     }
   },
   reactions: {
@@ -90,10 +91,19 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: "Ticket nao encontrado" });
     }
 
+    let quotedWhatsAppMessageId: string | undefined;
     if (quotedMsgId) {
       const quoted = await prisma.message.findUnique({ where: { id: quotedMsgId } });
       if (!quoted || quoted.ticketId !== ticketId) {
         return res.status(400).json({ error: "Mensagem citada invalida" });
+      }
+      // Permitir citar apenas mensagens recebidas do contato (canal WhatsApp e sem userId)
+      if (quoted.channel !== MessageChannel.WHATSAPP || quoted.userId) {
+        return res.status(400).json({ error: "Apenas mensagens recebidas podem ser citadas" });
+      }
+      const meta = (quoted.deliveryMetadata as any) || {};
+      if (typeof meta.whatsappMessageId === 'string') {
+        quotedWhatsAppMessageId = meta.whatsappMessageId;
       }
     }
 
@@ -186,16 +196,18 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
         channel: selectedChannel
       };
 
+      let waId: string | null = null;
       try {
         if (selectedChannel === MessageChannel.WHATSAPP) {
           const mediaPath = hasFile ? req.file?.path : undefined;
 
-          await sendWhatsAppMessage(
+          waId = await sendWhatsAppMessage(
             ticket.whatsapp!.id,
             ticket.contact.phoneNumber,
             messageBody,
             mediaUrl,
-            mediaPath ? path.resolve(mediaPath) : undefined
+            mediaPath ? path.resolve(mediaPath) : undefined,
+            { quotedWhatsAppMessageId, mimeType: req.file?.mimetype ?? null }
           );
         } else if (selectedChannel === MessageChannel.EMAIL) {
           const subject = `Atendimento WhatsKovi - Ticket ${ticketId}`;
@@ -218,7 +230,10 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
           where: { id: message.id },
           data: {
             status: MessageStatus.SENT,
-            deliveryMetadata: deliveryMetadata
+            deliveryMetadata: {
+              ...deliveryMetadata,
+              ...(waId ? { whatsappMessageId: waId } : {})
+            }
           },
           include: messageInclude
         });
@@ -366,6 +381,18 @@ export const addReaction = async (req: AuthRequest, res: Response) => {
     const message = await prisma.message.findUnique({ where: { id } });
     if (!message) {
       return res.status(404).json({ error: "Mensagem nao encontrada" });
+    }
+
+    // Se a mensagem veio do WhatsApp, propaga a reação para o WhatsApp também
+    if (message.channel === MessageChannel.WHATSAPP && !message.userId) {
+      const meta = (message.deliveryMetadata as any) || {};
+      if (typeof meta.whatsappMessageId === 'string' && message.ticketId) {
+        const ticket = await prisma.ticket.findUnique({ where: { id: message.ticketId }, select: { whatsappId: true } });
+        if (ticket?.whatsappId) {
+          // Ignora falha de reação no WhatsApp, mas continua persistindo localmente
+          await reactToWhatsAppMessage(ticket.whatsappId, meta.whatsappMessageId, emoji).catch(() => undefined);
+        }
+      }
     }
 
     await prisma.messageReaction.upsert({

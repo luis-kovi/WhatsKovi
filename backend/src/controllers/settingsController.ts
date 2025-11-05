@@ -61,7 +61,44 @@ export const updateServiceSettingsHandler = async (req: AuthRequest, res: Respon
       globalTicketLimit: Number(body.globalTicketLimit ?? 0),
       perAgentTicketLimit: Number(body.perAgentTicketLimit ?? 0),
       soundEnabled: Boolean(body.soundEnabled),
-      satisfactionSurveyEnabled: Boolean(body.satisfactionSurveyEnabled)
+      satisfactionSurveyEnabled: Boolean(body.satisfactionSurveyEnabled),
+      aiEnabled: Boolean(body.aiEnabled),
+      aiRoutingEnabled: Boolean(body.aiRoutingEnabled),
+      aiProvider:
+        typeof body.aiProvider === 'string' &&
+        ['OPENAI', 'GEMINI', 'HYBRID'].includes(body.aiProvider.toUpperCase())
+          ? (body.aiProvider.toUpperCase() as ServiceSettingsPayload['aiProvider'])
+          : 'OPENAI',
+      aiModel:
+        body.aiModel === null
+          ? null
+          : typeof body.aiModel === 'string'
+            ? body.aiModel
+            : undefined,
+      aiConfidenceThreshold:
+        typeof body.aiConfidenceThreshold === 'number'
+          ? body.aiConfidenceThreshold
+          : typeof body.aiConfidenceThreshold === 'string'
+            ? Number(body.aiConfidenceThreshold)
+            : undefined,
+      aiFallbackQueueId:
+        body.aiFallbackQueueId === null
+          ? null
+          : typeof body.aiFallbackQueueId === 'string'
+            ? body.aiFallbackQueueId
+            : undefined,
+      aiGeminiApiKey:
+        body.aiGeminiApiKey === null
+          ? null
+          : typeof body.aiGeminiApiKey === 'string'
+            ? body.aiGeminiApiKey
+            : undefined,
+      aiOpenAiApiKey:
+        body.aiOpenAiApiKey === null
+          ? null
+          : typeof body.aiOpenAiApiKey === 'string'
+            ? body.aiOpenAiApiKey
+            : undefined
     };
 
     const updated = await updateServiceSettings(payload, req.user?.id);

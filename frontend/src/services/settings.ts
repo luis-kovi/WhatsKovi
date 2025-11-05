@@ -25,7 +25,14 @@ export const persistGeneralSettings = async (payload: {
 };
 
 export const persistServiceSettings = async (payload: ServiceSettings) => {
-  const response = await api.put<ServiceSettings>('/settings/advanced/service', payload);
+  const response = await api.put<ServiceSettings>('/settings/advanced/service', {
+    ...payload,
+    aiModel: payload.aiModel ?? null,
+    aiConfidenceThreshold: payload.aiConfidenceThreshold ?? null,
+    aiFallbackQueueId: payload.aiFallbackQueueId ?? null,
+    aiGeminiApiKey: payload.aiGeminiApiKey ?? null,
+    aiOpenAiApiKey: payload.aiOpenAiApiKey ?? null
+  });
   return response.data;
 };
 
