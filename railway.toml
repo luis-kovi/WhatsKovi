@@ -11,14 +11,15 @@ root = "backend"
 [services.backend.environment]
 PORT = "3001"
 NODE_ENV = "production"
+RAILPACK_CONFIG_FILE = "backend.railpack.json"
 
 [services.backend.build]
 builder = "NIXPACKS"
-installCommand = "npm install"
-buildCommand = "npm run build"
+installCommand = "npm ci --prefix backend"
+buildCommand = "npm run --prefix backend build"
 
 [services.backend.deploy]
-startCommand = "npx prisma migrate deploy && npm run start"
+startCommand = "cd backend && npx prisma migrate deploy && npm run start"
 
 [services.frontend]
 root = "frontend"
@@ -27,11 +28,12 @@ root = "frontend"
 PORT = "3000"
 NODE_ENV = "production"
 NEXT_TELEMETRY_DISABLED = "1"
+RAILPACK_CONFIG_FILE = "frontend.railpack.json"
 
 [services.frontend.build]
 builder = "NIXPACKS"
-installCommand = "npm install"
-buildCommand = "npm run build"
+installCommand = "npm ci --prefix frontend"
+buildCommand = "npm run --prefix frontend build"
 
 [services.frontend.deploy]
-startCommand = "npm run start"
+startCommand = "cd frontend && npm run start"
