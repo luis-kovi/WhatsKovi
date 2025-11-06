@@ -12,8 +12,6 @@ import {
   Flag,
   Layers,
   Tag as TagIcon,
-  Lock,
-  Unlock,
   Car,
   Loader2,
   Pencil
@@ -390,32 +388,36 @@ export default function ContactPanel() {
     selectTicket,
     updateTicketDetails,
     addTicketTags,
-    removeTicketTag
+    removeTicketTag,
+    acceptTicket,
+    closeTicket,
+    createManualTicket
   } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
     selectTicket: state.selectTicket,
     updateTicketDetails: state.updateTicketDetails,
     addTicketTags: state.addTicketTags,
-    removeTicketTag: state.removeTicketTag
+    removeTicketTag: state.removeTicketTag,
+    acceptTicket: state.acceptTicket,
+    closeTicket: state.closeTicket,
+    createManualTicket: state.createManualTicket
   }));
-const {
-  selectedContact,
-  loadContact,
-  loading,
-  clearSelected,
-  notes,
-  fetchContactNotes,
-  createNote: createContactNote,
-  updateContact
+  const {
+    selectedContact,
+    loadContact,
+    loading,
+    clearSelected,
+    notes,
+    fetchContactNotes,
+    createNote: createContactNote
   } = useContactStore((state) => ({
-  selectedContact: state.selectedContact,
-  loadContact: state.loadContact,
-  loading: state.loading,
-  clearSelected: state.clearSelected,
-  notes: state.notes,
+    selectedContact: state.selectedContact,
+    loadContact: state.loadContact,
+    loading: state.loading,
+    clearSelected: state.clearSelected,
+    notes: state.notes,
     fetchContactNotes: state.fetchContactNotes,
-    createNote: state.createNote,
-    updateContact: state.updateContact
+    createNote: state.createNote
   }));
 
   const { tags, queues, fetchTags, fetchQueues } = useMetadataStore((state) => ({
@@ -432,7 +434,6 @@ const {
   const [carPlateInput, setCarPlateInput] = useState('');
   const [carPlateError, setCarPlateError] = useState<string | null>(null);
   const [carPlateSaving, setCarPlateSaving] = useState(false);
-  const [blockingContact, setBlockingContact] = useState(false);
 
   const priorityButtonRef = useRef<HTMLButtonElement | null>(null);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
@@ -446,6 +447,7 @@ const {
   const [savingNote, setSavingNote] = useState(false);
   const [notesHistoryOpen, setNotesHistoryOpen] = useState(false);
   const [ticketHistoryOpen, setTicketHistoryOpen] = useState(false);
+  const [ticketActionLoading, setTicketActionLoading] = useState(false);
 
   useEffect(() => {
     if (selectedTicket) {
@@ -527,10 +529,6 @@ const {
   );
 
   const contactBlocked = selectedContact?.isBlocked ?? false;
-  const contactStatusLabel = contactBlocked ? 'Bloqueado' : 'Ativo';
-  const contactStatusClass = contactBlocked
-    ? 'border border-red-200 bg-red-100 text-red-600'
-    : 'border border-emerald-200 bg-emerald-100 text-emerald-600';
 
   const handleCreateNote = async (content: string) => {
     if (!selectedContact) return;
@@ -594,22 +592,6 @@ const {
     } catch (error) {
       console.error('Erro ao atualizar tags do ticket:', error);
       toast.error('Nao foi possivel atualizar as tags.');
-    }
-  };
-
-  const handleToggleBlockContact = async () => {
-    if (!selectedContact) return;
-    try {
-      setBlockingContact(true);
-      await updateContact(selectedContact.id, { isBlocked: !contactBlocked });
-      toast.success(
-        contactBlocked ? 'Contato desbloqueado com sucesso.' : 'Contato bloqueado para novos atendimentos.'
-      );
-    } catch (error) {
-      console.error('Erro ao atualizar status do contato:', error);
-      toast.error('Nao foi possivel atualizar o status do contato.');
-    } finally {
-      setBlockingContact(false);
     }
   };
 
@@ -685,6 +667,65 @@ const {
   const contactPhone = ticket.contact.phoneNumber;
   const ticketReference = ticket.id.slice(0, 8).toUpperCase();
   const carPlateDisplay = ticket.carPlate ? ticket.carPlate : 'Nao cadastrada';
+  const isTicketClosed = ticket.status === 'CLOSED';
+  const requiresAcceptance = ticket.status === 'PENDING' || ticket.status === 'BOT';
+  const disableTicketAdjustments = contactBlocked || isTicketClosed;
+  const ticketActionLabel = isTicketClosed
+    ? 'Abrir ticket'
+    : requiresAcceptance
+    ? 'Aceitar ticket'
+    : 'Finalizar ticket';
+  const ticketActionClass = isTicketClosed
+    ? 'bg-primary text-white hover:bg-primary/90'
+    : requiresAcceptance
+    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+    : 'bg-rose-500 text-white hover:bg-rose-600';
+  const isTicketActionDisabled = ticketActionLoading || contactBlocked;
+
+  const handleTicketAction = async () => {
+    if (!selectedTicket) return;
+    if (contactBlocked) {
+      toast.error('Contato bloqueado. Desbloqueie para prosseguir.');
+      return;
+    }
+
+    setTicketActionLoading(true);
+    try {
+      if (isTicketClosed) {
+        const newTicketId = await createManualTicket({
+          phoneNumber: ticket.contact.phoneNumber,
+          name: ticket.contact.name,
+          email: ticket.contact.email ?? undefined,
+          queueId: ticket.queue?.id ?? undefined,
+          priority: ticket.priority ?? undefined,
+          tagIds: ticket.tags.map((relation) => relation.tag.id),
+          carPlate: ticket.carPlate ?? undefined,
+          type: ticket.type
+        });
+
+        if (newTicketId) {
+          await selectTicket(newTicketId);
+          toast.success('Novo ticket aberto para o contato.');
+        }
+      } else if (requiresAcceptance) {
+        await acceptTicket(ticket.id);
+        toast.success('Ticket aceito com sucesso.');
+      } else {
+        await closeTicket(ticket.id);
+        toast.success('Ticket finalizado com sucesso.');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar ticket:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Nao foi possivel atualizar o ticket.';
+      toast.error(message);
+    } finally {
+      setTicketActionLoading(false);
+    }
+  };
+
   return (
     <>
       <aside className="hidden w-96 flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex">
@@ -694,83 +735,80 @@ const {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
               <header className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-800">Resumo do ticket</h3>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-500">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600">Resumo do ticket</h3>
+                <span className="rounded-full bg-gray-100 px-3 py-0.5 text-[11px] font-semibold text-gray-500">
                   #{ticketReference}
                 </span>
               </header>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase text-gray-500">Status</p>
-                  <p
-                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ticketStatusClass}`}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Status</p>
+                  <span
+                    className={`mt-1 inline-flex min-h-[24px] items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${ticketStatusClass}`}
                   >
                     {ticketStatusLabel}
-                  </p>
+                  </span>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase text-gray-500">Canal</p>
-                  <p
-                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ticketTypeClass}`}
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Canal</p>
+                  <span
+                    className={`mt-1 inline-flex min-h-[24px] items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${ticketTypeClass}`}
                   >
                     {ticketTypeLabel}
-                  </p>
+                  </span>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase text-gray-500">Prioridade</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className={`inline-flex h-2.5 w-2.5 rounded-full ${priorityIndicatorClass}`} />
-                    <span className="text-sm font-semibold text-gray-800">{priorityLabel}</span>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Prioridade</p>
+                  <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-gray-800">
+                    <span className={`inline-flex h-2 w-2 rounded-full ${priorityIndicatorClass}`} />
+                    {priorityLabel}
                   </div>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase text-gray-500">Fila</p>
-                  <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-gray-800">
-                    {ticket.queue ? (
-                      <>
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ticket.queue.color }} />
-                        {queueLabel}
-                      </>
-                    ) : (
-                      'Sem fila'
-                    )}
-                  </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Fila</p>
+                  {ticket.queue ? (
+                    <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-gray-800">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ticket.queue.color }} />
+                      {queueLabel}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Sem fila</p>
+                  )}
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase text-gray-500">Status do contato</p>
-                  <p
-                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${contactStatusClass}`}
-                  >
-                    {contactBlocked ? <Lock size={12} /> : <Unlock size={12} />}
-                    {contactStatusLabel}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <div className="flex items-start justify-between">
-                    <p className="text-[10px] font-semibold uppercase text-gray-500">Placa do carro</p>
+                <div className="col-span-2 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Placa do carro</p>
+                      <p className="mt-1 font-mono text-sm uppercase tracking-wider text-gray-800">{carPlateDisplay}</p>
+                    </div>
                     <button
                       type="button"
                       onClick={openCarPlateEditor}
-                      className="rounded-full border border-primary/40 p-1 text-primary transition hover:bg-primary/10"
+                      className="rounded-md border border-primary/40 p-1.5 text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/30"
                       aria-label={ticket.carPlate ? 'Editar placa do carro' : 'Adicionar placa do carro'}
                     >
                       <Pencil size={14} />
                     </button>
                   </div>
-                  <p className="mt-2 font-mono text-sm uppercase tracking-wider text-gray-800">{carPlateDisplay}</p>
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="relative">
                   <button
                     type="button"
                     ref={priorityButtonRef}
-                    onClick={() => setShowPriorityMenu((prev) => !prev)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+                    disabled={disableTicketAdjustments}
+                    onClick={() => {
+                      if (disableTicketAdjustments) return;
+                      setShowPriorityMenu((prev) => !prev);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      disableTicketAdjustments ? 'bg-gray-200 text-gray-500' : 'bg-primary text-white hover:bg-primary/90'
+                    }`}
                   >
                     <Flag size={16} />
                     Prioridade
@@ -801,8 +839,16 @@ const {
                   <button
                     type="button"
                     ref={queueButtonRef}
-                    onClick={() => setShowQueueMenu((prev) => !prev)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+                    disabled={disableTicketAdjustments}
+                    onClick={() => {
+                      if (disableTicketAdjustments) return;
+                      setShowQueueMenu((prev) => !prev);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-secondary/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      disableTicketAdjustments
+                        ? 'bg-gray-200 text-gray-500'
+                        : 'bg-secondary text-white hover:bg-secondary/80'
+                    }`}
                   >
                     <Layers size={16} />
                     Transferir
@@ -835,12 +881,20 @@ const {
                   )}
                 </div>
 
-                <div className="relative">
+                <div className="relative col-span-2">
                   <button
                     type="button"
                     ref={tagButtonRef}
-                    onClick={() => setIsTagMenuOpen((prev) => !prev)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+                    disabled={disableTicketAdjustments}
+                    onClick={() => {
+                      if (disableTicketAdjustments) return;
+                      setIsTagMenuOpen((prev) => !prev);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      disableTicketAdjustments
+                        ? 'bg-gray-200 text-gray-500'
+                        : 'bg-accent text-white hover:bg-accent/80'
+                    }`}
                   >
                     <TagIcon size={16} />
                     Tags
@@ -848,7 +902,7 @@ const {
                   {isTagMenuOpen && (
                     <div
                       ref={tagMenuRef}
-                      className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
+                      className="absolute left-0 top-full z-40 mt-2 w-full rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
                     >
                       <p className="text-[10px] font-semibold uppercase text-gray-400">Selecione tags</p>
                       <div className="mt-2 flex flex-col gap-1">
@@ -881,16 +935,14 @@ const {
 
                 <button
                   type="button"
-                  onClick={handleToggleBlockContact}
-                  disabled={!selectedContact || blockingContact}
-                  className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleTicketAction}
+                  disabled={isTicketActionDisabled}
+                  className={`col-span-2 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${ticketActionClass}`}
                 >
-                  {contactBlocked ? <Unlock size={16} /> : <Lock size={16} />}
-                  {contactBlocked ? 'Desbloquear' : 'Bloquear'}
+                  {ticketActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {ticketActionLabel}
                 </button>
-
               </div>
-
             </section>
 
             <section className={PANEL_CARD_CLASS}>

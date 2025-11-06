@@ -177,7 +177,7 @@ export default function ChatbotPage() {
         toast.error('Nao foi possivel atualizar o status do fluxo.');
       }
     },
-    [saveFlow, selectFlow, flows]
+    [saveFlow, selectFlow]
   );
 
   const handleSaveFlow = useCallback(

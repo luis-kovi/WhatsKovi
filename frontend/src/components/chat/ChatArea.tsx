@@ -20,6 +20,8 @@ import {
   Sparkles,
   Zap,
   X,
+  Lock,
+  Unlock,
   Clock3
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
@@ -250,7 +252,10 @@ export default function ChatArea() {
     reactionPalette: state.reactionPalette
   }));
 
-  const selectedContact = useContactStore((state) => state.selectedContact);
+  const { selectedContact, updateContact } = useContactStore((state) => ({
+    selectedContact: state.selectedContact,
+    updateContact: state.updateContact
+  }));
 
   const { itemsByTicket: scheduledByTicket, fetchScheduledMessages } = useScheduledMessageStore((state) => ({
     itemsByTicket: state.itemsByTicket,
@@ -307,6 +312,8 @@ export default function ChatArea() {
   const [editingBody, setEditingBody] = useState('');
   const [editingPrivate, setEditingPrivate] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [processingBlockToggle, setProcessingBlockToggle] = useState(false);
 
 
   const scheduledMessages = useMemo(() => {
@@ -319,6 +326,7 @@ export default function ChatArea() {
   const contactEmail = (
     selectedContact?.email ?? selectedTicket?.contact.email ?? ''
   ).trim();
+  const contactBlocked = selectedContact?.isBlocked ?? false;
 
   const activeChannel = useMemo<MessageChannel>(() => {
     if (isPrivate) {
@@ -329,6 +337,12 @@ export default function ChatArea() {
   }, [isPrivate, selectedTicket?.type]);
 
   const isTicketClosed = selectedTicket?.status === 'CLOSED';
+  const conversationLocked = isTicketClosed || contactBlocked;
+  const conversationLockedMessage = contactBlocked ? 'Contato bloqueado.' : 'Atendimento encerrado.';
+  useEffect(() => {
+    setBlockModalOpen(false);
+    setProcessingBlockToggle(false);
+  }, [selectedContact?.id]);
   const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -571,8 +585,8 @@ export default function ChatArea() {
   );
 
   const handleToggleRecording = async () => {
-    if (isTicketClosed) {
-      toast.error('Atendimento encerrado.');
+    if (conversationLocked) {
+      toast.error(conversationLockedMessage);
       return;
     }
     if (!isPrivate && activeChannel !== 'WHATSAPP') {
@@ -702,13 +716,18 @@ export default function ChatArea() {
 
   const handleSendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isTicketClosed) return;
-    event.preventDefault();
+    if (conversationLocked) {
+      toast.error(conversationLockedMessage);
+      return;
+    }
     await sendCurrentMessage();
   };
 
   const handleFileButtonClick = () => {
-    if (isTicketClosed) return;
+    if (conversationLocked) {
+      toast.error(conversationLockedMessage);
+      return;
+    }
     if (!selectedTicket) return;
     if (!isPrivate && activeChannel !== 'WHATSAPP') {
       toast.error('Envio de arquivos disponivel apenas para WhatsApp.');
@@ -823,7 +842,10 @@ export default function ChatArea() {
   };
 
   const handleApplySuggestion = (suggestion: string) => {
-    if (isTicketClosed) return;
+    if (conversationLocked) {
+      toast.error(conversationLockedMessage);
+      return;
+    }
     setNewMessage(suggestion);
     setIsPrivate(false);
     setQuickReplyModalOpen(false);
@@ -834,8 +856,8 @@ export default function ChatArea() {
   };
 
   const handleRegenerateAiSuggestions = async () => {
-    if (isTicketClosed) {
-      toast.error('Atendimento encerrado.');
+    if (conversationLocked) {
+      toast.error(conversationLockedMessage);
       return;
     }
     if (!selectedTicket || !latestCustomerMessage) {
@@ -857,8 +879,8 @@ export default function ChatArea() {
   };
 
   const handleGenerateChatbotReply = async () => {
-    if (isTicketClosed) {
-      toast.error('Atendimento encerrado.');
+    if (conversationLocked) {
+      toast.error(conversationLockedMessage);
       return;
     }
     if (!selectedTicket || !latestCustomerMessage?.body) {
@@ -882,7 +904,12 @@ export default function ChatArea() {
   };
 
   const handleOpenScheduledModal = async () => {
-    if (!selectedTicket || isTicketClosed) return;
+    if (!selectedTicket || conversationLocked) {
+      if (conversationLocked) {
+        toast.error(conversationLockedMessage);
+      }
+      return;
+    }
     setShowEmojiPicker(false);
     setQuickReplyModalOpen(false);
     try {
@@ -892,6 +919,27 @@ export default function ChatArea() {
       toast.error('Nao foi possivel carregar as mensagens agendadas.');
     }
     setScheduledModalOpen(true);
+  };
+
+  const handleConfirmContactBlock = async () => {
+    if (!selectedContact) return;
+    setProcessingBlockToggle(true);
+    try {
+      await updateContact(selectedContact.id, { isBlocked: !contactBlocked });
+      toast.success(
+        contactBlocked ? 'Contato desbloqueado com sucesso.' : 'Contato bloqueado para novos atendimentos.'
+      );
+      setBlockModalOpen(false);
+    } catch (error) {
+      console.error('Erro ao atualizar status do contato:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Nao foi possivel atualizar o status do contato.';
+      toast.error(message);
+    } finally {
+      setProcessingBlockToggle(false);
+    }
   };
 
   const handleUseChatbotDraft = () => {
@@ -1072,6 +1120,12 @@ export default function ChatArea() {
               <p className="mt-1 text-[11px] uppercase tracking-wide text-gray-400">
                 Ticket #{selectedTicket.id.slice(0, 8).toUpperCase()}
               </p>
+              {contactBlocked && (
+                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
+                  <Lock size={11} />
+                  Contato bloqueado
+                </div>
+              )}
             </div>
           </div>
 
@@ -1085,8 +1139,28 @@ export default function ChatArea() {
             >
               <Download size={14} />
             </button>
+            <button
+              type="button"
+              onClick={() => setBlockModalOpen(true)}
+              disabled={!selectedContact || processingBlockToggle}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                contactBlocked
+                  ? 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+              }`}
+              aria-label={contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+              title={contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+            >
+              {processingBlockToggle ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : contactBlocked ? (
+                <Lock size={14} />
+              ) : (
+                <Unlock size={14} />
+              )}
+            </button>
 
-            {selectedTicket.status === 'CLOSED' && (
+            {selectedTicket.status === 'CLOSED' && !contactBlocked && (
               <button
                 type="button"
                 onClick={handleCreateFollowUpTicket}
@@ -1253,7 +1327,7 @@ export default function ChatArea() {
                 <button
                   type='button'
                   onClick={handleRegenerateAiSuggestions}
-                  disabled={isTicketClosed || isRegeneratingSuggestions || !latestCustomerMessage.body}
+                  disabled={conversationLocked || isRegeneratingSuggestions || !latestCustomerMessage.body}
                   className='inline-flex items-center gap-1 rounded-lg border border-violet-300 px-3 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60'
                 >
                   {isRegeneratingSuggestions ? (
@@ -1298,7 +1372,7 @@ export default function ChatArea() {
                   <button
                     type='button'
                     onClick={handleUseChatbotDraft}
-                    disabled={isTicketClosed}
+                    disabled={conversationLocked}
                     className='inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-emerald-300'
                   >
                     Usar resposta
@@ -1320,14 +1394,20 @@ export default function ChatArea() {
                 onKeyDown={(event) => handleTextareaKeyDown(event)}
                 rows={isPrivate ? 4 : 3}
                 placeholder={
-                  isTicketClosed ? 'Atendimento encerrado' : isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'
+                  conversationLocked
+                    ? contactBlocked
+                      ? 'Contato bloqueado. Desbloqueie para retomar o atendimento.'
+                      : 'Atendimento encerrado'
+                    : isPrivate
+                    ? 'Escreva uma nota interna...'
+                    : 'Digite sua mensagem...'
                 }
-                disabled={isTicketClosed}
+                disabled={conversationLocked}
                 className='h-full min-h-[77px] w-full resize-none rounded-xl border border-gray-300 px-4 pr-12 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:bg-gray-100'
               />
               <button
                 type='submit'
-                disabled={isTicketClosed || isSending || !newMessage.trim()}
+                disabled={conversationLocked || isSending || !newMessage.trim()}
                 className='absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/40'
                 aria-label='Enviar mensagem'
                 title='Enviar mensagem'
@@ -1343,7 +1423,7 @@ export default function ChatArea() {
                   setShowEmojiPicker((prev) => !prev);
                   setQuickReplyModalOpen(false);
                 }}
-                disabled={isTicketClosed}
+                disabled={conversationLocked}
                 className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
                   showEmojiPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
@@ -1354,7 +1434,7 @@ export default function ChatArea() {
               <button
                 type='button'
                 onClick={handleFileButtonClick}
-                disabled={isTicketClosed || uploadingFile}
+                disabled={conversationLocked || uploadingFile}
                 className='flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
                 title='Anexar arquivo'
               >
@@ -1363,7 +1443,7 @@ export default function ChatArea() {
               <button
                 type='button'
                 onClick={handleToggleRecording}
-                disabled={isTicketClosed || uploadingFile}
+                disabled={conversationLocked || uploadingFile}
                 className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
                   isRecording
                     ? 'border-red-400 bg-red-50 text-red-500 hover:bg-red-100'
@@ -1376,10 +1456,10 @@ export default function ChatArea() {
               <button
                 type='button'
                 onClick={async () => {
-                  if (isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body) return;
+                  if (isGeneratingDraft || !latestCustomerMessage?.body) return;
                   await handleGenerateChatbotReply();
                 }}
-                disabled={isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body}
+                disabled={conversationLocked || isGeneratingDraft || !latestCustomerMessage?.body}
                 className='flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-not-allowed disabled:bg-violet-400'
                 title='IA responde'
               >
@@ -1388,11 +1468,14 @@ export default function ChatArea() {
               <button
                 type='button'
                 onClick={() => {
-                  if (isTicketClosed) return;
+                  if (conversationLocked) {
+                    toast.error(conversationLockedMessage);
+                    return;
+                  }
                   setQuickReplyModalOpen(true);
                   setShowEmojiPicker(false);
                 }}
-                disabled={isTicketClosed}
+                disabled={conversationLocked}
                 className='flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500 text-white shadow transition hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-amber-300'
                 title='Respostas rápidas'
               >
@@ -1401,7 +1484,7 @@ export default function ChatArea() {
               <button
                 type='button'
                 onClick={handleOpenScheduledModal}
-                disabled={isTicketClosed}
+                disabled={conversationLocked}
                 className='relative flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
                 title='Agendamentos'
               >
@@ -1424,6 +1507,75 @@ export default function ChatArea() {
 
         <input ref={fileInputRef} type='file' className='hidden' onChange={handleFileUpload} />
       </div>
+
+      {blockModalOpen && selectedContact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-10">
+          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {contactBlocked
+                    ? 'O contato voltara a receber notificacoes e mensagens dos agentes.'
+                    : 'Nenhuma notificacao sera enviada e o atendimento ficara indisponivel enquanto estiver bloqueado.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!processingBlockToggle) {
+                    setBlockModalOpen(false);
+                  }
+                }}
+                className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={processingBlockToggle}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-sm font-semibold text-gray-800">{selectedContact.name}</p>
+                <p className="text-xs text-gray-500">{selectedContact.phoneNumber}</p>
+              </div>
+              <p className="text-sm text-gray-600">
+                {contactBlocked
+                  ? 'Confirme se deseja restabelecer o atendimento para este contato.'
+                  : 'Confirme para bloquear o contato e impedir novas interacoes ate que seja desbloqueado.'}
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBlockModalOpen(false)}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={processingBlockToggle}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmContactBlock}
+                  disabled={processingBlockToggle}
+                  className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    contactBlocked ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-500 hover:bg-rose-600'
+                  }`}
+                >
+                  {processingBlockToggle ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : contactBlocked ? (
+                    <Unlock size={14} />
+                  ) : (
+                    <Lock size={14} />
+                  )}
+                  {contactBlocked ? 'Desbloquear' : 'Bloquear'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingMessage && (
         <MessageEditModal
