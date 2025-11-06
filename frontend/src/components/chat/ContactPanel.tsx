@@ -15,7 +15,8 @@ import {
   Lock,
   Unlock,
   Car,
-  Loader2
+  Loader2,
+  Pencil
 } from 'lucide-react';
 
 import { useTicketStore } from '@/store/ticketStore';
@@ -387,16 +388,12 @@ export default function ContactPanel() {
   const {
     selectedTicket,
     selectTicket,
-    closeTicket,
-    acceptTicket,
     updateTicketDetails,
     addTicketTags,
     removeTicketTag
   } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
     selectTicket: state.selectTicket,
-    closeTicket: state.closeTicket,
-    acceptTicket: state.acceptTicket,
     updateTicketDetails: state.updateTicketDetails,
     addTicketTags: state.addTicketTags,
     removeTicketTag: state.removeTicketTag
@@ -616,28 +613,6 @@ const {
     }
   };
 
-  const handleAcceptTicket = async () => {
-    if (!selectedTicket) return;
-    try {
-      await acceptTicket(selectedTicket.id);
-      toast.success('Atendimento aceito');
-    } catch (error) {
-      console.error('Erro ao aceitar ticket:', error);
-      toast.error('Nao foi possivel aceitar o ticket.');
-    }
-  };
-
-  const handleFinalizeTicket = async () => {
-    if (!selectedTicket) return;
-    try {
-      await closeTicket(selectedTicket.id);
-      toast.success('Atendimento finalizado');
-    } catch (error) {
-      console.error('Erro ao finalizar ticket:', error);
-      toast.error('Nao foi possivel finalizar o ticket.');
-    }
-  };
-
   const openCarPlateEditor = () => {
     if (!selectedTicket) return;
     const initialValue = selectedTicket.carPlate ? normalizeCarPlate(selectedTicket.carPlate) : '';
@@ -713,10 +688,6 @@ const {
   return (
     <>
       <aside className="hidden w-96 flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex">
-        <div className="flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">Detalhes do contato</h2>
-        </div>
-
         {loading || !selectedContact ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -725,93 +696,73 @@ const {
           <div className="flex flex-col gap-3">
             <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
               <header className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-800">Resumo do ticket</h3>
-                  <p className="text-xs text-gray-500">Status atual e canal de atendimento.</p>
-                </div>
+                <h3 className="text-sm font-semibold text-gray-800">Resumo do ticket</h3>
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-500">
                   #{ticketReference}
                 </span>
               </header>
 
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <span className="text-[10px] font-semibold uppercase text-gray-500">Status</span>
-                  <span
-                    className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${ticketStatusClass}`}
+                  <p className="text-[10px] font-semibold uppercase text-gray-500">Status</p>
+                  <p
+                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ticketStatusClass}`}
                   >
                     {ticketStatusLabel}
-                  </span>
+                  </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <span className="text-[10px] font-semibold uppercase text-gray-500">Canal</span>
-                  <span
-                    className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${ticketTypeClass}`}
+                  <p className="text-[10px] font-semibold uppercase text-gray-500">Canal</p>
+                  <p
+                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ticketTypeClass}`}
                   >
                     {ticketTypeLabel}
-                  </span>
+                  </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <span className="text-[10px] font-semibold uppercase text-gray-500">Prioridade</span>
+                  <p className="text-[10px] font-semibold uppercase text-gray-500">Prioridade</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className={`inline-flex h-2.5 w-2.5 rounded-full ${priorityIndicatorClass}`} />
                     <span className="text-sm font-semibold text-gray-800">{priorityLabel}</span>
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <span className="text-[10px] font-semibold uppercase text-gray-500">Fila</span>
-                  <span className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <p className="text-[10px] font-semibold uppercase text-gray-500">Fila</p>
+                  <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-gray-800">
                     {ticket.queue ? (
                       <>
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: ticket.queue.color }}
-                        />
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ticket.queue.color }} />
                         {queueLabel}
                       </>
                     ) : (
                       'Sem fila'
                     )}
-                  </span>
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <span className="text-[10px] font-semibold uppercase text-gray-500">Status do contato</span>
-                  <span
-                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${contactStatusClass}`}
+                  <p className="text-[10px] font-semibold uppercase text-gray-500">Status do contato</p>
+                  <p
+                    className={`mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${contactStatusClass}`}
                   >
                     {contactBlocked ? <Lock size={12} /> : <Unlock size={12} />}
                     {contactStatusLabel}
-                  </span>
+                  </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <span className="text-[10px] font-semibold uppercase text-gray-500">Placa do carro</span>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="font-mono text-sm uppercase tracking-wider text-gray-800">
-                      {carPlateDisplay}
-                    </span>
+                  <div className="flex items-start justify-between">
+                    <p className="text-[10px] font-semibold uppercase text-gray-500">Placa do carro</p>
                     <button
                       type="button"
                       onClick={openCarPlateEditor}
-                      className="inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10"
+                      className="rounded-full border border-primary/40 p-1 text-primary transition hover:bg-primary/10"
+                      aria-label={ticket.carPlate ? 'Editar placa do carro' : 'Adicionar placa do carro'}
                     >
-                      <Car size={14} />
-                      {ticket.carPlate ? 'Editar' : 'Adicionar'}
+                      <Pencil size={14} />
                     </button>
                   </div>
+                  <p className="mt-2 font-mono text-sm uppercase tracking-wider text-gray-800">{carPlateDisplay}</p>
                 </div>
               </div>
-            </section>
-
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              <header className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-800">Acoes rapidas</h3>
-                  <p className="text-xs text-gray-500">Gerencie o atendimento sem sair da conversa.</p>
-                </div>
-              </header>
 
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="relative">
@@ -819,13 +770,10 @@ const {
                     type="button"
                     ref={priorityButtonRef}
                     onClick={() => setShowPriorityMenu((prev) => !prev)}
-                    className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100"
+                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <Flag size={14} />
-                      Prioridade
-                    </span>
-                    <span>{priorityLabel}</span>
+                    <Flag size={16} />
+                    Prioridade
                   </button>
                   {showPriorityMenu && (
                     <div
@@ -854,13 +802,10 @@ const {
                     type="button"
                     ref={queueButtonRef}
                     onClick={() => setShowQueueMenu((prev) => !prev)}
-                    className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100"
+                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <Layers size={14} />
-                      Transferir
-                    </span>
-                    <span className="truncate text-right">{queueLabel}</span>
+                    <Layers size={16} />
+                    Transferir
                   </button>
                   {showQueueMenu && (
                     <div
@@ -895,13 +840,10 @@ const {
                     type="button"
                     ref={tagButtonRef}
                     onClick={() => setIsTagMenuOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100"
+                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <TagIcon size={14} />
-                      Tags
-                    </span>
-                    <span>{activeTagIds.length}</span>
+                    <TagIcon size={16} />
+                    Tags
                   </button>
                   {isTagMenuOpen && (
                     <div
@@ -941,33 +883,11 @@ const {
                   type="button"
                   onClick={handleToggleBlockContact}
                   disabled={!selectedContact || blockingContact}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {contactBlocked ? <Unlock size={14} /> : <Lock size={14} />}
-                  {contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+                  {contactBlocked ? <Unlock size={16} /> : <Lock size={16} />}
+                  {contactBlocked ? 'Desbloquear' : 'Bloquear'}
                 </button>
-
-                {ticket.status === 'OPEN' && (
-                  <button
-                    type="button"
-                    onClick={handleFinalizeTicket}
-                    className="col-span-2 flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-600"
-                  >
-                    Finalizar ticket
-                  </button>
-                )}
-
-                {(ticket.status === 'PENDING' || ticket.status === 'BOT') && (
-                  <button
-                    type="button"
-                    onClick={handleAcceptTicket}
-                    className="col-span-2 flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90"
-                  >
-                    Aceitar ticket
-                  </button>
-                )}
-              </div>
-            </section>
 
             <section className={PANEL_CARD_CLASS}>
               <header className="flex items-center justify-between gap-2">
