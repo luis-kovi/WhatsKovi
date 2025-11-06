@@ -889,6 +889,10 @@ const {
                   {contactBlocked ? 'Desbloquear' : 'Bloquear'}
                 </button>
 
+              </div>
+
+            </section>
+
             <section className={PANEL_CARD_CLASS}>
               <header className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
@@ -1014,7 +1018,7 @@ const {
                   <Car size={18} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Placa do veículo</p>
+                  <p className="text-sm font-semibold text-gray-900">Placa do veiculo</p>
                   <p className="text-xs text-gray-500">Associe ou atualize a placa vinculada ao ticket.</p>
                 </div>
               </div>
@@ -1039,7 +1043,7 @@ const {
                   autoFocus
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase tracking-widest focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                <p className="mt-1 text-[11px] text-gray-500">Use o padrão Mercosul (ABC1D23). Deixe vazio para remover.</p>
+                <p className="mt-1 text-[11px] text-gray-500">Use o padrao Mercosul (ABC1D23). Deixe vazio para remover.</p>
               </div>
               {carPlateError && <p className="text-sm text-rose-500">{carPlateError}</p>}
               <div className="flex justify-end gap-2">
