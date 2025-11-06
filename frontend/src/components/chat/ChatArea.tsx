@@ -1308,25 +1308,32 @@ export default function ChatArea() {
   const ticketStatusLabel = TICKET_STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status;
   const ticketStatusClass = TICKET_STATUS_STYLES[selectedTicket.status] ?? 'bg-slate-200 text-slate-600';
   const queueLabel = selectedTicket.queue ? selectedTicket.queue.name : 'Sem fila';
+  const blockActionLabel = contactBlocked ? 'Desbloquear contato' : 'Bloquear contato';
+  const blockButtonClass = contactBlocked
+    ? 'border-red-200 text-red-600 hover:bg-red-50 disabled:hover:bg-transparent dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10'
+    : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 disabled:hover:bg-transparent dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10';
+  const carPlateClass = selectedTicket.carPlate
+    ? `border-emerald-500 bg-emerald-50 text-emerald-700${isCarPlateEditorOpen ? '' : ' animate-pulse hover:animate-none'}`
+    : 'border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary';
 
   return (
-    <div className='flex flex-1 flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-950'>
-      <div className='border-b border-gray-200 bg-white px-4 py-2 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900'>
-        <div className='flex flex-1 flex-wrap items-center justify-between gap-3'>
-          <div className='flex flex-1 flex-wrap items-center gap-4'>
-            <div className='flex items-center gap-3'>
-              <div className='relative h-10 w-10 overflow-hidden rounded-full'>
+    <div className="flex flex-1 flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-950">
+      <div className="border-b border-gray-200 bg-white px-4 py-2 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-1 flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="relative h-10 w-10 overflow-hidden rounded-full">
                 {contactAvatar.hasImage && contactAvatar.src ? (
                   <Image
                     src={contactAvatar.src}
                     alt={selectedTicket.contact.name}
                     fill
-                    className='object-cover'
+                    className="object-cover"
                     unoptimized
                   />
                 ) : (
                   <div
-                    className='flex h-full w-full items-center justify-center text-base font-semibold text-primary'
+                    className="flex h-full w-full items-center justify-center text-base font-semibold text-primary"
                     style={{ backgroundColor: contactAvatar.backgroundColor }}
                   >
                     {contactAvatar.initials || selectedTicket.contact.name.charAt(0).toUpperCase()}
@@ -1334,10 +1341,16 @@ export default function ChatArea() {
                 )}
               </div>
               <div>
-                <p className='text-sm font-semibold text-gray-800 dark:text-slate-100'>{selectedTicket.contact.name}</p>
-                <p className='text-xs text-gray-500 dark:text-slate-400'>{selectedTicket.contact.phoneNumber}</p>
-                {contactEmail && <p className='text-xs text-gray-500 dark:text-slate-400'>{contactEmail}</p>}
-                <div className='mt-1 flex flex-wrap items-center gap-2'>
+                <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                  {selectedTicket.contact.name}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                  {selectedTicket.contact.phoneNumber}
+                </p>
+                {contactEmail && (
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{contactEmail}</p>
+                )}
+                <div className="mt-1 flex flex-wrap items-center gap-2">
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${contactStatusClass}`}
                   >
@@ -1352,81 +1365,73 @@ export default function ChatArea() {
               </div>
             </div>
 
-            <div className='flex items-center gap-2'>
-              <div className='relative group'>
+            <div className="flex items-center gap-2">
+              <div className="relative">
                 <button
-                  type='button'
+                  type="button"
                   ref={priorityButtonRef}
                   onClick={() => setShowPriorityMenu((prev) => !prev)}
-                  className='flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
-                  aria-label='Definir prioridade'
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  aria-label="Definir prioridade"
+                  title={`Prioridade: ${priorityLabel}`}
                 >
                   <Flag size={14} />
                   <span className={`absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full ${priorityIndicatorClass}`} />
                 </button>
-                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-                  Prioridade: {priorityLabel}
-                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-                </div>
                 {showPriorityMenu && (
                   <div
                     ref={priorityMenuRef}
-                    className='absolute left-0 top-full z-40 mt-2 w-44 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800'
+                    className="absolute left-0 top-full z-40 mt-2 w-44 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800"
                   >
                     {PRIORITY_OPTIONS.map((option) => (
                       <button
                         key={option.value}
-                        type='button'
+                        type="button"
                         onClick={() => handlePriorityChange(option.value)}
-                        className='flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700'
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700"
                       >
                         <span>{option.label}</span>
-                        <span
-                          className={`h-2.5 w-2.5 rounded-full ${
-                            PRIORITY_COLORS[option.value] ?? 'bg-gray-300'
-                          }`}
-                        />
+                        <span className={`h-2.5 w-2.5 rounded-full ${PRIORITY_COLORS[option.value] ?? 'bg-gray-300'}`} />
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className='relative group'>
+              <div className="relative">
                 <button
-                  type='button'
+                  type="button"
                   onClick={() => setShowQueueMenu((prev) => !prev)}
-                  className='flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
-                  aria-label='Definir fila'
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  aria-label="Definir fila"
+                  title={`Fila: ${queueLabel}`}
                 >
                   <Layers size={14} />
                   {selectedTicket.queue && (
                     <span
-                      className='absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full'
+                      className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full"
                       style={{ backgroundColor: selectedTicket.queue.color }}
                     />
                   )}
                 </button>
-                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-                  Fila: {queueLabel}
-                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-                </div>
                 {showQueueMenu && (
-                  <div className='absolute left-0 top-full z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 text-left shadow-lg dark:border-slate-700 dark:bg-slate-800'>
+                  <div className="absolute left-0 top-full z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 text-left shadow-lg dark:border-slate-700 dark:bg-slate-800">
                     <button
+                      type="button"
                       onClick={() => handleQueueChange(null)}
-                      className='flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700'
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700"
                     >
                       Remover fila
                     </button>
-                    <div className='my-1 border-t border-gray-100 dark:border-slate-700/60' />
+                    <div className="my-1 border-t border-gray-100 dark:border-slate-700/60" />
                     {queues.map((queue) => (
                       <button
                         key={queue.id}
+                        type="button"
                         onClick={() => handleQueueChange(queue.id)}
-                        className='flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700'
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700"
                       >
-                        <span className='h-2 w-2 rounded-full' style={{ backgroundColor: queue.color }} />
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: queue.color }} />
                         {queue.name}
                       </button>
                     ))}
@@ -1434,36 +1439,37 @@ export default function ChatArea() {
                 )}
               </div>
 
-              <div className='relative group'>
+              <div className="relative">
                 <button
-                  type='button'
+                  type="button"
                   ref={tagButtonRef}
                   onClick={() => setIsTagMenuOpen((prev) => !prev)}
-                  className='flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-primary text-primary transition hover:bg-primary/10 dark:text-primary'
-                  aria-label='Gerenciar tags'
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-primary text-primary transition hover:bg-primary/10 dark:text-primary"
+                  aria-label="Gerenciar tags"
+                  title="Gerenciar tags"
                 >
                   <TagIcon size={14} />
                 </button>
-                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-                  Gerenciar tags
-                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-                </div>
                 {isTagMenuOpen && (
                   <div
                     ref={tagMenuRef}
-                    className='absolute left-0 z-40 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800'
+                    className="absolute left-0 z-40 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800"
                   >
-                    <p className='text-[10px] font-semibold uppercase text-gray-400 dark:text-slate-400'>Selecione tags</p>
-                    <div className='mt-2 flex flex-col gap-1'>
+                    <p className="text-[10px] font-semibold uppercase text-gray-400 dark:text-slate-400">
+                      Selecione tags
+                    </p>
+                    <div className="mt-2 flex flex-col gap-1">
                       {tags.length === 0 ? (
-                        <span className='text-[11px] text-gray-500 dark:text-slate-400'>Nenhuma tag cadastrada.</span>
+                        <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                          Nenhuma tag cadastrada.
+                        </span>
                       ) : (
                         tags.map((tag) => {
                           const active = activeTagIds.includes(tag.id);
                           return (
                             <button
                               key={tag.id}
-                              type='button'
+                              type="button"
                               onClick={() => handleToggleTag(tag.id)}
                               className={`flex items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition ${
                                 active
@@ -1471,7 +1477,7 @@ export default function ChatArea() {
                                   : 'border border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700'
                               }`}
                             >
-                              <span className='h-2.5 w-2.5 rounded-full' style={{ backgroundColor: tag.color }} />
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
                               #{tag.name}
                             </button>
                           );
@@ -1482,72 +1488,52 @@ export default function ChatArea() {
                 )}
               </div>
 
-              <div className='group relative'>
-                <button
-                  type='button'
-                  onClick={handleToggleBlockContact}
-                  disabled={!selectedContact || contactLoading || blockingContact}
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg border transition ${
-                    contactBlocked
-                      ? 'border-red-200 text-red-600 hover:bg-red-50 disabled:hover:bg-transparent dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10'
-                      : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 disabled:hover:bg-transparent dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10'
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                  aria-label={contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
-                >
-                  {contactBlocked ? <Lock size={14} /> : <Unlock size={14} />}
-                </button>
-                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-                  {contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
-                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={handleToggleBlockContact}
+                disabled={!selectedContact || contactLoading || blockingContact}
+                className={`flex h-9 w-9 items-center justify-center rounded-lg border transition ${blockButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
+                title={blockActionLabel}
+                aria-label={blockActionLabel}
+              >
+                {contactBlocked ? <Lock size={14} /> : <Unlock size={14} />}
+              </button>
             </div>
           </div>
-          <div className='flex items-center gap-2'>
-            <div className='group relative'>
-              <button
-                onClick={handleExportConversation}
-                className='flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
-                aria-label='Exportar conversa'
-              >
-                <Download size={14} />
-              </button>
-              <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-                Exportar conversa
-                <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-              </div>
-            </div>
 
-            <div className='group relative'>
-              <button
-                type='button'
-                onClick={openCarPlateEditor}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-                  selectedTicket.carPlate
-                    ? `border-emerald-500 bg-emerald-50 text-emerald-700${
-                        isCarPlateEditorOpen ? '' : ' animate-pulse hover:animate-none'
-                      }`
-                    : 'border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary'
-                }`}
-                aria-label={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
-              >
-                <Car size={14} />
-                {selectedTicket.carPlate ? (
-                  <span className='font-mono text-xs uppercase tracking-wider'>{selectedTicket.carPlate}</span>
-                ) : (
-                  <span className='text-[11px] font-semibold'>Adicionar placa</span>
-                )}
-              </button>
-              <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-                {selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
-                <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportConversation}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              aria-label="Exportar conversa"
+              title="Exportar conversa"
+            >
+              <Download size={14} />
+            </button>
+
+            <button
+              type="button"
+              onClick={openCarPlateEditor}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${carPlateClass}`}
+              aria-label={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
+              title={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
+            >
+              <Car size={14} />
+              {selectedTicket.carPlate ? (
+                <span className="font-mono text-xs uppercase tracking-wider">
+                  {selectedTicket.carPlate}
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold">Adicionar placa</span>
+              )}
+            </button>
 
             {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
               <button
+                type="button"
                 onClick={handleAcceptTicket}
-                className='rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90'
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90"
               >
                 Aceitar
               </button>
@@ -1555,8 +1541,9 @@ export default function ChatArea() {
 
             {selectedTicket.status === 'OPEN' && (
               <button
+                type="button"
                 onClick={handleCloseTicket}
-                className='rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-600'
+                className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-600"
               >
                 Finalizar
               </button>
@@ -1564,15 +1551,15 @@ export default function ChatArea() {
 
             {selectedTicket.status === 'CLOSED' && (
               <button
+                type="button"
                 onClick={handleCreateFollowUpTicket}
                 disabled={creatingFollowUpTicket}
-                className='inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60'
+                className="inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {creatingFollowUpTicket ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus size={14} />}
+                {creatingFollowUpTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus size={14} />}
                 Criar novo ticket
               </button>
             )}
-
           </div>
         </div>
       </div>
