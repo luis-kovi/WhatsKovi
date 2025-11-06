@@ -226,24 +226,32 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
           deliveryMetadata.status = smsResult.status ?? null;
         }
 
-        finalMessage = await prisma.message.update({
-          where: { id: message.id },
-          data: {
-            status: MessageStatus.SENT,
-            deliveryMetadata: {
-              ...deliveryMetadata,
-              ...(waId ? { whatsappMessageId: waId } : {})
-            }
-          },
-          include: messageInclude
-        });
+        // Verificar se a mensagem ainda existe antes de atualizar
+        const existingMessage = await prisma.message.findUnique({ where: { id: message.id } });
+        if (existingMessage) {
+          finalMessage = await prisma.message.update({
+            where: { id: message.id },
+            data: {
+              status: MessageStatus.SENT,
+              deliveryMetadata: {
+                ...deliveryMetadata,
+                ...(waId ? { whatsappMessageId: waId } : {})
+              }
+            },
+            include: messageInclude
+          });
+        }
       } catch (error) {
-        await prisma.message.update({
-          where: { id: message.id },
-          data: {
-            status: MessageStatus.FAILED
-          }
-        });
+        // Verificar se a mensagem ainda existe antes de marcar como falha
+        const existingMessage = await prisma.message.findUnique({ where: { id: message.id } });
+        if (existingMessage) {
+          await prisma.message.update({
+            where: { id: message.id },
+            data: {
+              status: MessageStatus.FAILED
+            }
+          });
+        }
 
         if (req.file) {
           fs.unlink(req.file.path).catch(() => undefined);

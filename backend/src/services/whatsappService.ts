@@ -121,14 +121,32 @@ export const initializeWhatsApp = async (connectionId: string) => {
       io.emit('whatsapp:ready', { connectionId, phoneNumber: info.wid.user });
     });
 
-    client.on('disconnected', async () => {
+    client.on('disconnected', async (reason) => {
+      console.log(`WhatsApp desconectado (${connectionId}):`, reason);
+      
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
         data: { status: 'DISCONNECTED' }
       });
 
-      clients.delete(connectionId);
-      io.emit('whatsapp:disconnected', { connectionId });
+      const clientData = clients.get(connectionId);
+      if (clientData) {
+        clientData.status = 'DISCONNECTED';
+      }
+      
+      io.emit('whatsapp:disconnected', { connectionId, reason });
+      
+      // Tentar reconectar após 30 segundos se não foi desconexão manual
+      if (reason !== 'LOGOUT') {
+        setTimeout(async () => {
+          try {
+            console.log(`Tentando reconectar WhatsApp (${connectionId})...`);
+            await initializeWhatsApp(connectionId);
+          } catch (error) {
+            console.error(`Falha na reconexão automática (${connectionId}):`, error);
+          }
+        }, 30000);
+      }
     });
 
     client.on('message', async (msg) => {
@@ -396,6 +414,11 @@ export const sendWhatsAppMessage = async (
 
     if (!clientData) {
       throw new Error('Cliente WhatsApp nao encontrado');
+    }
+
+    // Verificar se o cliente ainda está conectado
+    if (clientData.status === 'DISCONNECTED') {
+      throw new Error('Cliente WhatsApp desconectado');
     }
 
     const chatId = `${phoneNumber}@c.us`;
