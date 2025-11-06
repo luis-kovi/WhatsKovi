@@ -399,7 +399,9 @@ export default function ChatArea() {
     }
   };
 
-  const contactEmail = selectedTicket?.contact.email?.trim() ?? '';
+  const contactEmail = (
+    selectedContact?.email ?? selectedTicket?.contact.email ?? ''
+  ).trim();
 
   const channelOptions = useMemo<ChannelOption[]>(() => {
     if (isPrivate) {
@@ -1300,7 +1302,6 @@ export default function ChatArea() {
   const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
   const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
 
-  const contactEmail = selectedContact?.email ?? selectedTicket.contact.email ?? null;
   const contactBlocked = selectedContact?.isBlocked ?? false;
   const contactStatusLabel = contactBlocked ? 'Bloqueado' : 'Ativo';
   const contactStatusClass = contactBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600';
@@ -1561,38 +1562,6 @@ export default function ChatArea() {
               </button>
             )}
           </div>
-        </div>
-      </div>
-
-          {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
-            <button
-              onClick={handleAcceptTicket}
-              className='rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90'
-            >
-              Aceitar
-            </button>
-          )}
-
-          {selectedTicket.status === 'OPEN' && (
-            <button
-              onClick={handleCloseTicket}
-              className='rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-600'
-            >
-              Finalizar
-            </button>
-          )}
-
-          {selectedTicket.status === 'CLOSED' && (
-            <button
-              onClick={handleCreateFollowUpTicket}
-              disabled={creatingFollowUpTicket}
-              className='inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60'
-            >
-              {creatingFollowUpTicket ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus size={14} />}
-              Criar novo ticket
-            </button>
-          )}
-
         </div>
       </div>
 
