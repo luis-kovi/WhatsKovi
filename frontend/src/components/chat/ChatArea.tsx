@@ -1875,7 +1875,7 @@ export default function ChatArea() {
                   isTicketClosed ? 'Atendimento encerrado' : isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'
                 }
                 disabled={isTicketClosed}
-                className='h-full min-h-[128px] w-full resize-none rounded-xl border border-gray-300 px-4 pr-12 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:bg-gray-100'
+                className='h-full min-h-[77px] w-full resize-none rounded-xl border border-gray-300 px-4 pr-12 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:bg-gray-100'
               />
               <button
                 type='submit'
@@ -1887,7 +1887,7 @@ export default function ChatArea() {
                 {isSending ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
               </button>
             </div>
-            <div className='relative flex w-12 flex-col items-center gap-2'>
+            <div className='relative grid w-24 grid-cols-2 grid-rows-3 gap-2 justify-items-center'>
               <button
                 type='button'
                 ref={emojiButtonRef}
