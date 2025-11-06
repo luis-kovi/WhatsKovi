@@ -20,11 +20,6 @@ import {
   Sparkles,
   Zap,
   X,
-  Car,
-  Layers,
-  Flag,
-  Lock,
-  Unlock,
   Clock3
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
@@ -38,45 +33,9 @@ import { MessageItem } from '@/components/chat/MessageItem';
 import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
-import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
 import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
-
-const PRIORITY_OPTIONS = [
-  { value: 'LOW', label: 'Baixa' },
-  { value: 'MEDIUM', label: 'Media' },
-  { value: 'HIGH', label: 'Alta' },
-  { value: 'URGENT', label: 'Urgente' }
-];
-
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: 'Baixa',
-  MEDIUM: 'Media',
-  HIGH: 'Alta',
-  URGENT: 'Urgente'
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW: 'bg-emerald-400',
-  MEDIUM: 'bg-amber-400',
-  HIGH: 'bg-orange-500',
-  URGENT: 'bg-rose-500'
-};
-
-const TICKET_STATUS_LABELS: Record<string, string> = {
-  BOT: 'Chatbot',
-  PENDING: 'Pendente',
-  OPEN: 'Em atendimento',
-  CLOSED: 'Encerrado'
-};
-
-const TICKET_STATUS_STYLES: Record<string, string> = {
-  BOT: 'bg-indigo-100 text-indigo-600',
-  PENDING: 'bg-amber-100 text-amber-600',
-  OPEN: 'bg-sky-100 text-sky-600',
-  CLOSED: 'bg-slate-200 text-slate-600'
-};
 
 type MessageEditModalProps = {
   message: TicketMessage;
@@ -273,11 +232,6 @@ export default function ChatArea() {
 
   const {
     selectedTicket,
-    acceptTicket,
-    closeTicket,
-    updateTicketDetails,
-    addTicketTags,
-    removeTicketTag,
     createManualTicket,
     aiSuggestionsByMessage,
     aiChatbotDrafts,
@@ -285,11 +239,6 @@ export default function ChatArea() {
     previewChatbotReply
   } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
-    acceptTicket: state.acceptTicket,
-    closeTicket: state.closeTicket,
-    updateTicketDetails: state.updateTicketDetails,
-    addTicketTags: state.addTicketTags,
-    removeTicketTag: state.removeTicketTag,
     createManualTicket: state.createManualTicket,
     aiSuggestionsByMessage: state.aiSuggestionsByMessage,
     aiChatbotDrafts: state.aiChatbotDrafts,
@@ -297,19 +246,11 @@ export default function ChatArea() {
     previewChatbotReply: state.previewChatbotReply
   }));
 
-  const { tags, queues, reactionPalette, fetchTags, fetchQueues } = useMetadataStore((state) => ({
-    tags: state.tags,
-    queues: state.queues,
-    reactionPalette: state.reactionPalette,
-    fetchTags: state.fetchTags,
-    fetchQueues: state.fetchQueues
+  const { reactionPalette } = useMetadataStore((state) => ({
+    reactionPalette: state.reactionPalette
   }));
 
-  const { selectedContact, updateContact, loading: contactLoading } = useContactStore((state) => ({
-    selectedContact: state.selectedContact,
-    updateContact: state.updateContact,
-    loading: state.loading
-  }));
+  const selectedContact = useContactStore((state) => state.selectedContact);
 
   const { itemsByTicket: scheduledByTicket, fetchScheduledMessages } = useScheduledMessageStore((state) => ({
     itemsByTicket: state.itemsByTicket,
@@ -351,9 +292,6 @@ export default function ChatArea() {
   const [isSending, setIsSending] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [isQuickReplyModalOpen, setQuickReplyModalOpen] = useState(false);
-  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
-  const [showPriorityMenu, setShowPriorityMenu] = useState(false);
-  const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -363,74 +301,13 @@ export default function ChatArea() {
   const [isAiSuggestionsVisible, setIsAiSuggestionsVisible] = useState(false);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [creatingFollowUpTicket, setCreatingFollowUpTicket] = useState(false);
-  const [blockingContact, setBlockingContact] = useState(false);
   const [scheduledModalOpen, setScheduledModalOpen] = useState(false);
   const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<TicketMessage | null>(null);
   const [editingBody, setEditingBody] = useState('');
   const [editingPrivate, setEditingPrivate] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
-  const [isCarPlateEditorOpen, setCarPlateEditorOpen] = useState(false);
-  const [carPlateInput, setCarPlateInput] = useState('');
-  const [carPlateError, setCarPlateError] = useState<string | null>(null);
-  const [carPlateSaving, setCarPlateSaving] = useState(false);
 
-  const openCarPlateEditor = useCallback(() => {
-    if (!selectedTicket) return;
-    const initialValue = selectedTicket.carPlate ? normalizeCarPlate(selectedTicket.carPlate) : '';
-    setCarPlateInput(initialValue);
-    setCarPlateError(null);
-    setCarPlateEditorOpen(true);
-  }, [selectedTicket]);
-
-  const closeCarPlateEditor = useCallback(() => {
-    setCarPlateEditorOpen(false);
-    setCarPlateError(null);
-  }, []);
-
-  const handleCarPlateInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = normalizeCarPlate(event.target.value);
-    setCarPlateInput(value);
-    if (carPlateError) {
-      setCarPlateError(null);
-    }
-  };
-
-  const handleCarPlateSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedTicket) return;
-
-    const normalized = normalizeCarPlate(carPlateInput);
-
-    if (normalized && !isValidCarPlate(normalized)) {
-      setCarPlateError('Placa inválida. Use o formato ABC1D23.');
-      return;
-    }
-
-    const existing = selectedTicket.carPlate ?? '';
-    if (!normalized && !existing) {
-      closeCarPlateEditor();
-      return;
-    }
-
-    if (normalized === existing) {
-      closeCarPlateEditor();
-      return;
-    }
-
-    setCarPlateSaving(true);
-    try {
-      await updateTicketDetails(selectedTicket.id, { carPlate: normalized || null });
-      toast.success(normalized ? 'Placa do carro atualizada.' : 'Placa do carro removida.');
-      closeCarPlateEditor();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível atualizar a placa do carro.';
-      setCarPlateError(message);
-      toast.error(message);
-    } finally {
-      setCarPlateSaving(false);
-    }
-  };
 
   const scheduledMessages = useMemo(() => {
     if (!selectedTicket) return [];
@@ -491,10 +368,6 @@ export default function ChatArea() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
-  const priorityButtonRef = useRef<HTMLButtonElement | null>(null);
-  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
-  const tagButtonRef = useRef<HTMLButtonElement | null>(null);
-  const tagMenuRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -502,11 +375,6 @@ export default function ChatArea() {
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shouldDiscardRecordingRef = useRef(false);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const activeTagIds = useMemo(
-    () => selectedTicket?.tags.map((relation) => relation.tag.id) ?? [],
-    [selectedTicket?.tags]
-  );
 
   const exportPreview = useMemo(
     () =>
@@ -528,10 +396,8 @@ export default function ChatArea() {
   }, []);
 
   useEffect(() => {
-    fetchTags();
-    fetchQueues();
     loadQuickReplyVariables();
-  }, [fetchTags, fetchQueues, loadQuickReplyVariables]);
+  }, [loadQuickReplyVariables]);
 
   useEffect(() => {
     if (!selectedTicket) return;
@@ -576,42 +442,6 @@ export default function ChatArea() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenuMessageId]);
 
-  useEffect(() => {
-    if (!isTagMenuOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        tagMenuRef.current &&
-        !tagMenuRef.current.contains(target) &&
-        tagButtonRef.current &&
-        !tagButtonRef.current.contains(target)
-      ) {
-        setIsTagMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isTagMenuOpen]);
-  useEffect(() => {
-    if (!showPriorityMenu) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        priorityMenuRef.current &&
-        !priorityMenuRef.current.contains(target) &&
-        priorityButtonRef.current &&
-        !priorityButtonRef.current.contains(target)
-      ) {
-        setShowPriorityMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showPriorityMenu]);
   useEffect(() => {
     setIsAiSuggestionsVisible(false);
   }, [selectedTicket?.id]);
@@ -870,7 +700,7 @@ export default function ChatArea() {
     }
   }, [selectedTicket, isSending, newMessage, sendMessageAction, isPrivate, quotedMessage, activeChannel]);
 
-  const handleSendMessage = async (event: React.FormEvent) => {
+  const handleSendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isTicketClosed) return;
     event.preventDefault();
@@ -952,18 +782,6 @@ export default function ChatArea() {
     }
   };
 
-  const handleAcceptTicket = async () => {
-    if (!selectedTicket) return;
-    await acceptTicket(selectedTicket.id);
-    toast.success('Atendimento aceito');
-  };
-
-  const handleCloseTicket = async () => {
-    if (!selectedTicket) return;
-    await closeTicket(selectedTicket.id);
-    toast.success('Atendimento finalizado');
-  };
-
   const handleCreateFollowUpTicket = async () => {
     if (!selectedTicket || creatingFollowUpTicket) return;
 
@@ -992,55 +810,6 @@ export default function ChatArea() {
       toast.error('Nao foi possivel criar o novo ticket.');
     } finally {
       setCreatingFollowUpTicket(false);
-    }
-  };
-
-  const handlePriorityChange = async (priority: string) => {
-    if (!selectedTicket) return;
-    await updateTicketDetails(selectedTicket.id, { priority });
-    toast.success('Prioridade atualizada');
-    setShowPriorityMenu(false);
-  };
-
-  const handleQueueChange = async (queueId: string | null) => {
-    if (!selectedTicket) return;
-    await updateTicketDetails(selectedTicket.id, { queueId });
-    toast.success('Fila atualizada');
-    setShowQueueMenu(false);
-  };
-
-  const handleToggleBlockContact = async () => {
-    if (!selectedContact || blockingContact) return;
-    try {
-      setBlockingContact(true);
-      await updateContact(selectedContact.id, { isBlocked: !selectedContact.isBlocked });
-      toast.success(
-        selectedContact.isBlocked
-          ? 'Contato desbloqueado com sucesso.'
-          : 'Contato bloqueado para novos atendimentos.'
-      );
-    } catch (error) {
-      console.error('Erro ao atualizar status do contato:', error);
-      toast.error('Nao foi possivel atualizar o status do contato.');
-    } finally {
-      setBlockingContact(false);
-    }
-  };
-
-  const handleToggleTag = async (tagId: string) => {
-    if (!selectedTicket) return;
-
-    try {
-      if (activeTagIds.includes(tagId)) {
-        await removeTicketTag(selectedTicket.id, tagId);
-        toast.success('Tag removida do atendimento');
-      } else {
-        await addTicketTags(selectedTicket.id, [tagId]);
-        toast.success('Tag aplicada ao atendimento');
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar tags do ticket:', error);
-      toast.error('Nao foi possivel atualizar as tags.');
     }
   };
 
@@ -1219,9 +988,6 @@ export default function ChatArea() {
   useEffect(() => {
     if (!selectedTicket) {
       setExportModalOpen(false);
-      setCarPlateEditorOpen(false);
-      setCarPlateError(null);
-      setCarPlateInput('');
     }
   }, [selectedTicket]);
 
@@ -1270,207 +1036,42 @@ export default function ChatArea() {
     );
   }
 
-  const currentPriority = selectedTicket.priority ?? 'LOW';
-  const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
-  const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
-
-  const contactBlocked = selectedContact?.isBlocked ?? false;
-  const contactStatusLabel = contactBlocked ? 'Bloqueado' : 'Ativo';
-  const contactStatusClass = contactBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600';
-
-  const ticketStatusLabel = TICKET_STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status;
-  const ticketStatusClass = TICKET_STATUS_STYLES[selectedTicket.status] ?? 'bg-slate-200 text-slate-600';
-  const queueLabel = selectedTicket.queue ? selectedTicket.queue.name : 'Sem fila';
-  const blockActionLabel = contactBlocked ? 'Desbloquear contato' : 'Bloquear contato';
-  const blockButtonClass = contactBlocked
-    ? 'border-red-200 text-red-600 hover:bg-red-50 disabled:hover:bg-transparent dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10'
-    : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 disabled:hover:bg-transparent dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10';
-  const carPlateClass = selectedTicket.carPlate
-    ? `border-emerald-500 bg-emerald-50 text-emerald-700${isCarPlateEditorOpen ? '' : ' animate-pulse hover:animate-none'}`
-    : 'border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary';
-
   return (
     <div className="flex flex-1 flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-950">
       <div className="border-b border-gray-200 bg-white px-4 py-2 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-1 flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-1 flex-wrap items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="relative h-10 w-10 overflow-hidden rounded-full">
-                {contactAvatar.hasImage && contactAvatar.src ? (
-                  <Image
-                    src={contactAvatar.src}
-                    alt={selectedTicket.contact.name}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center text-base font-semibold text-primary"
-                    style={{ backgroundColor: contactAvatar.backgroundColor }}
-                  >
-                    {contactAvatar.initials || selectedTicket.contact.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
-                  {selectedTicket.contact.name}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-slate-400">
-                  {selectedTicket.contact.phoneNumber}
-                </p>
-                {contactEmail && (
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{contactEmail}</p>
-                )}
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${contactStatusClass}`}
-                  >
-                    Contato: {contactStatusLabel}
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${ticketStatusClass}`}
-                  >
-                    Ticket: {ticketStatusLabel}
-                  </span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="relative h-10 w-10 overflow-hidden rounded-full">
+              {contactAvatar.hasImage && contactAvatar.src ? (
+                <Image
+                  src={contactAvatar.src}
+                  alt={selectedTicket.contact.name}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center text-base font-semibold text-primary"
+                  style={{ backgroundColor: contactAvatar.backgroundColor }}
+                >
+                  {contactAvatar.initials || selectedTicket.contact.name.charAt(0).toUpperCase()}
                 </div>
-              </div>
+              )}
             </div>
-
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  ref={priorityButtonRef}
-                  onClick={() => setShowPriorityMenu((prev) => !prev)}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                  aria-label="Definir prioridade"
-                  title={`Prioridade: ${priorityLabel}`}
-                >
-                  <Flag size={14} />
-                  <span className={`absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full ${priorityIndicatorClass}`} />
-                </button>
-                {showPriorityMenu && (
-                  <div
-                    ref={priorityMenuRef}
-                    className="absolute left-0 top-full z-40 mt-2 w-44 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    {PRIORITY_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handlePriorityChange(option.value)}
-                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                      >
-                        <span>{option.label}</span>
-                        <span className={`h-2.5 w-2.5 rounded-full ${PRIORITY_COLORS[option.value] ?? 'bg-gray-300'}`} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowQueueMenu((prev) => !prev)}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                  aria-label="Definir fila"
-                  title={`Fila: ${queueLabel}`}
-                >
-                  <Layers size={14} />
-                  {selectedTicket.queue && (
-                    <span
-                      className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: selectedTicket.queue.color }}
-                    />
-                  )}
-                </button>
-                {showQueueMenu && (
-                  <div className="absolute left-0 top-full z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 text-left shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => handleQueueChange(null)}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                    >
-                      Remover fila
-                    </button>
-                    <div className="my-1 border-t border-gray-100 dark:border-slate-700/60" />
-                    {queues.map((queue) => (
-                      <button
-                        key={queue.id}
-                        type="button"
-                        onClick={() => handleQueueChange(queue.id)}
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                      >
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: queue.color }} />
-                        {queue.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  ref={tagButtonRef}
-                  onClick={() => setIsTagMenuOpen((prev) => !prev)}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-primary text-primary transition hover:bg-primary/10 dark:text-primary"
-                  aria-label="Gerenciar tags"
-                  title="Gerenciar tags"
-                >
-                  <TagIcon size={14} />
-                </button>
-                {isTagMenuOpen && (
-                  <div
-                    ref={tagMenuRef}
-                    className="absolute left-0 z-40 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    <p className="text-[10px] font-semibold uppercase text-gray-400 dark:text-slate-400">
-                      Selecione tags
-                    </p>
-                    <div className="mt-2 flex flex-col gap-1">
-                      {tags.length === 0 ? (
-                        <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                          Nenhuma tag cadastrada.
-                        </span>
-                      ) : (
-                        tags.map((tag) => {
-                          const active = activeTagIds.includes(tag.id);
-                          return (
-                            <button
-                              key={tag.id}
-                              type="button"
-                              onClick={() => handleToggleTag(tag.id)}
-                              className={`flex items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition ${
-                                active
-                                  ? 'bg-primary text-white'
-                                  : 'border border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700'
-                              }`}
-                            >
-                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
-                              #{tag.name}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleToggleBlockContact}
-                disabled={!selectedContact || contactLoading || blockingContact}
-                className={`flex h-9 w-9 items-center justify-center rounded-lg border transition ${blockButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
-                title={blockActionLabel}
-                aria-label={blockActionLabel}
-              >
-                {contactBlocked ? <Lock size={14} /> : <Unlock size={14} />}
-              </button>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                {selectedTicket.contact.name}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                {selectedTicket.contact.phoneNumber}
+              </p>
+              {contactEmail && (
+                <p className="truncate text-xs text-gray-500 dark:text-slate-400">{contactEmail}</p>
+              )}
+              <p className="mt-1 text-[11px] uppercase tracking-wide text-gray-400">
+                Ticket #{selectedTicket.id.slice(0, 8).toUpperCase()}
+              </p>
             </div>
           </div>
 
@@ -1484,43 +1085,6 @@ export default function ChatArea() {
             >
               <Download size={14} />
             </button>
-
-            <button
-              type="button"
-              onClick={openCarPlateEditor}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${carPlateClass}`}
-              aria-label={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
-              title={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
-            >
-              <Car size={14} />
-              {selectedTicket.carPlate ? (
-                <span className="font-mono text-xs uppercase tracking-wider">
-                  {selectedTicket.carPlate}
-                </span>
-              ) : (
-                <span className="text-[11px] font-semibold">Adicionar placa</span>
-              )}
-            </button>
-
-            {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
-              <button
-                type="button"
-                onClick={handleAcceptTicket}
-                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90"
-              >
-                Aceitar
-              </button>
-            )}
-
-            {selectedTicket.status === 'OPEN' && (
-              <button
-                type="button"
-                onClick={handleCloseTicket}
-                className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-600"
-              >
-                Finalizar
-              </button>
-            )}
 
             {selectedTicket.status === 'CLOSED' && (
               <button
@@ -1882,66 +1446,6 @@ export default function ChatArea() {
           onClose={handleCancelDelete}
           onConfirm={handleConfirmDelete}
         />
-      )}
-
-      {isCarPlateEditorOpen && selectedTicket && (
-        <div className='fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4'>
-          <div className='w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl'>
-            <div className='mb-4 flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <div className='flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary'>
-                  <Car size={18} />
-                </div>
-                <div>
-                  <p className='text-sm font-semibold text-gray-900'>Placa do veículo</p>
-                  <p className='text-xs text-gray-500'>Associe ou atualize a placa vinculada ao ticket.</p>
-                </div>
-              </div>
-              <button
-                type='button'
-                onClick={closeCarPlateEditor}
-                className='rounded-lg p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30'
-                aria-label='Fechar editor de placa'
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={handleCarPlateSubmit} className='space-y-4'>
-              <div>
-                <label className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Placa do carro</label>
-                <input
-                  type='text'
-                  value={carPlateInput}
-                  onChange={handleCarPlateInputChange}
-                  placeholder='ABC1D23'
-                  maxLength={7}
-                  autoFocus
-                  className='mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase tracking-widest focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30'
-                />
-                <p className='mt-1 text-[11px] text-gray-500'>Use o padrão Mercosul (ABC1D23). Deixe vazio para remover.</p>
-              </div>
-              {carPlateError && <p className='text-sm text-rose-500'>{carPlateError}</p>}
-              <div className='flex justify-end gap-2'>
-                <button
-                  type='button'
-                  onClick={closeCarPlateEditor}
-                  className='rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100'
-                  disabled={carPlateSaving}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type='submit'
-                  disabled={carPlateSaving}
-                  className='inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60'
-                >
-                  {carPlateSaving ? <Loader2 className='h-4 w-4 animate-spin' /> : <Car size={14} />}
-                  Salvar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       {selectedTicket && (
