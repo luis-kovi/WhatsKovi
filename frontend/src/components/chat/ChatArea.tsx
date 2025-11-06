@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Tag as TagIcon,
   Mic,
-  ChevronDown,
   Plus,
   RotateCcw,
   Download,
@@ -21,13 +20,18 @@ import {
   Sparkles,
   Zap,
   X,
-  Car
+  Car,
+  Layers,
+  Flag,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useMessages } from '@/hooks/useMessages';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuthStore } from '@/store/authStore';
+import { useContactStore } from '@/store/contactStore';
 import { MessageItem } from '@/components/chat/MessageItem';
 import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
@@ -43,6 +47,34 @@ const PRIORITY_OPTIONS = [
   { value: 'HIGH', label: 'Alta' },
   { value: 'URGENT', label: 'Urgente' }
 ];
+
+const PRIORITY_LABELS: Record<string, string> = {
+  LOW: 'Baixa',
+  MEDIUM: 'Media',
+  HIGH: 'Alta',
+  URGENT: 'Urgente'
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  LOW: 'bg-emerald-400',
+  MEDIUM: 'bg-amber-400',
+  HIGH: 'bg-orange-500',
+  URGENT: 'bg-rose-500'
+};
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  BOT: 'Chatbot',
+  PENDING: 'Pendente',
+  OPEN: 'Em atendimento',
+  CLOSED: 'Encerrado'
+};
+
+const TICKET_STATUS_STYLES: Record<string, string> = {
+  BOT: 'bg-indigo-100 text-indigo-600',
+  PENDING: 'bg-amber-100 text-amber-600',
+  OPEN: 'bg-sky-100 text-sky-600',
+  CLOSED: 'bg-slate-200 text-slate-600'
+};
 
 type ChannelOption = {
   value: MessageChannel;
@@ -244,6 +276,12 @@ export default function ChatArea() {
     fetchQueues: state.fetchQueues
   }));
 
+  const { selectedContact, updateContact, loading: contactLoading } = useContactStore((state) => ({
+    selectedContact: state.selectedContact,
+    updateContact: state.updateContact,
+    loading: state.loading
+  }));
+
   const {
     fetchQuickReplies: loadQuickReplies,
     fetchVariables: loadQuickReplyVariables
@@ -281,6 +319,7 @@ export default function ChatArea() {
   const [messageChannel, setMessageChannel] = useState<MessageChannel>('WHATSAPP');
   const [isQuickReplyModalOpen, setQuickReplyModalOpen] = useState(false);
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
+  const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -292,6 +331,7 @@ export default function ChatArea() {
   const [isAiSuggestionsVisible, setIsAiSuggestionsVisible] = useState(false);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [creatingFollowUpTicket, setCreatingFollowUpTicket] = useState(false);
+  const [blockingContact, setBlockingContact] = useState(false);
   const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<TicketMessage | null>(null);
   const [editingBody, setEditingBody] = useState('');
@@ -477,6 +517,8 @@ export default function ChatArea() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
+  const priorityButtonRef = useRef<HTMLButtonElement | null>(null);
+  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const tagButtonRef = useRef<HTMLButtonElement | null>(null);
   const tagMenuRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -597,6 +639,24 @@ export default function ChatArea() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isTagMenuOpen]);
+  useEffect(() => {
+    if (!showPriorityMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        priorityMenuRef.current &&
+        !priorityMenuRef.current.contains(target) &&
+        priorityButtonRef.current &&
+        !priorityButtonRef.current.contains(target)
+      ) {
+        setShowPriorityMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPriorityMenu]);
   useEffect(() => {
     setIsAiSuggestionsVisible(false);
   }, [selectedTicket?.id]);
@@ -974,11 +1034,11 @@ export default function ChatArea() {
     }
   };
 
-  const handlePriorityChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handlePriorityChange = async (priority: string) => {
     if (!selectedTicket) return;
-    const priority = event.target.value;
     await updateTicketDetails(selectedTicket.id, { priority });
     toast.success('Prioridade atualizada');
+    setShowPriorityMenu(false);
   };
 
   const handleQueueChange = async (queueId: string | null) => {
@@ -986,6 +1046,24 @@ export default function ChatArea() {
     await updateTicketDetails(selectedTicket.id, { queueId });
     toast.success('Fila atualizada');
     setShowQueueMenu(false);
+  };
+
+  const handleToggleBlockContact = async () => {
+    if (!selectedContact || blockingContact) return;
+    try {
+      setBlockingContact(true);
+      await updateContact(selectedContact.id, { isBlocked: !selectedContact.isBlocked });
+      toast.success(
+        selectedContact.isBlocked
+          ? 'Contato desbloqueado com sucesso.'
+          : 'Contato bloqueado para novos atendimentos.'
+      );
+    } catch (error) {
+      console.error('Erro ao atualizar status do contato:', error);
+      toast.error('Nao foi possivel atualizar o status do contato.');
+    } finally {
+      setBlockingContact(false);
+    }
   };
 
   const handleToggleTag = async (tagId: string) => {
@@ -1218,67 +1296,135 @@ export default function ChatArea() {
     );
   }
 
+  const currentPriority = selectedTicket.priority ?? 'LOW';
+  const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
+  const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
+
+  const contactEmail = selectedContact?.email ?? selectedTicket.contact.email ?? null;
+  const contactBlocked = selectedContact?.isBlocked ?? false;
+  const contactStatusLabel = contactBlocked ? 'Bloqueado' : 'Ativo';
+  const contactStatusClass = contactBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600';
+
+  const ticketStatusLabel = TICKET_STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status;
+  const ticketStatusClass = TICKET_STATUS_STYLES[selectedTicket.status] ?? 'bg-slate-200 text-slate-600';
+  const queueLabel = selectedTicket.queue ? selectedTicket.queue.name : 'Sem fila';
+
   return (
     <div className='flex flex-1 flex-col bg-gray-50 transition-colors duration-300 dark:bg-slate-950'>
-      <div className='flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900'>
-        <div className='flex items-center gap-2'>
-          <div className='relative h-10 w-10 overflow-hidden rounded-full'>
-            {contactAvatar.hasImage && contactAvatar.src ? (
-              <Image
-                src={contactAvatar.src}
-                alt={selectedTicket.contact.name}
-                fill
-                className='object-cover'
-                unoptimized
-              />
-            ) : (
-              <div
-                className='flex h-full w-full items-center justify-center text-base font-semibold text-primary'
-                style={{ backgroundColor: contactAvatar.backgroundColor }}
-              >
-                {contactAvatar.initials || selectedTicket.contact.name.charAt(0).toUpperCase()}
+      <div className='border-b border-gray-200 bg-white px-4 py-2 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900'>
+        <div className='flex flex-1 flex-wrap items-center justify-between gap-3'>
+          <div className='flex flex-1 flex-wrap items-center gap-4'>
+            <div className='flex items-center gap-3'>
+              <div className='relative h-10 w-10 overflow-hidden rounded-full'>
+                {contactAvatar.hasImage && contactAvatar.src ? (
+                  <Image
+                    src={contactAvatar.src}
+                    alt={selectedTicket.contact.name}
+                    fill
+                    className='object-cover'
+                    unoptimized
+                  />
+                ) : (
+                  <div
+                    className='flex h-full w-full items-center justify-center text-base font-semibold text-primary'
+                    style={{ backgroundColor: contactAvatar.backgroundColor }}
+                  >
+                    {contactAvatar.initials || selectedTicket.contact.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <div>
-            <p className='text-sm font-semibold text-gray-800'>{selectedTicket.contact.name}</p>
-            <p className='text-xs text-gray-500'>{selectedTicket.contact.phoneNumber}</p>
-            <div className='mt-1 flex items-center gap-2'>
-              <select
-                value={selectedTicket.priority}
-                onChange={handlePriorityChange}
-                className='rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-600 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'
-              >
-                {PRIORITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    Prioridade {option.label}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <p className='text-sm font-semibold text-gray-800 dark:text-slate-100'>{selectedTicket.contact.name}</p>
+                <p className='text-xs text-gray-500 dark:text-slate-400'>{selectedTicket.contact.phoneNumber}</p>
+                {contactEmail && <p className='text-xs text-gray-500 dark:text-slate-400'>{contactEmail}</p>}
+                <div className='mt-1 flex flex-wrap items-center gap-2'>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${contactStatusClass}`}
+                  >
+                    Contato: {contactStatusLabel}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${ticketStatusClass}`}
+                  >
+                    Ticket: {ticketStatusLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-              <div className='relative'>
+            <div className='flex items-center gap-2'>
+              <div className='relative group'>
                 <button
-                  onClick={() => setShowQueueMenu((prev) => !prev)}
-                  className='inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-600 transition hover:bg-gray-100'
+                  type='button'
+                  ref={priorityButtonRef}
+                  onClick={() => setShowPriorityMenu((prev) => !prev)}
+                  className='flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
+                  aria-label='Definir prioridade'
                 >
-                  {selectedTicket.queue ? selectedTicket.queue.name : 'Sem fila'}
-                  <ChevronDown size={12} />
+                  <Flag size={14} />
+                  <span className={`absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full ${priorityIndicatorClass}`} />
                 </button>
+                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+                  Prioridade: {priorityLabel}
+                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+                </div>
+                {showPriorityMenu && (
+                  <div
+                    ref={priorityMenuRef}
+                    className='absolute left-0 top-full z-40 mt-2 w-44 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800'
+                  >
+                    {PRIORITY_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type='button'
+                        onClick={() => handlePriorityChange(option.value)}
+                        className='flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700'
+                      >
+                        <span>{option.label}</span>
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            PRIORITY_COLORS[option.value] ?? 'bg-gray-300'
+                          }`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
+              <div className='relative group'>
+                <button
+                  type='button'
+                  onClick={() => setShowQueueMenu((prev) => !prev)}
+                  className='flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
+                  aria-label='Definir fila'
+                >
+                  <Layers size={14} />
+                  {selectedTicket.queue && (
+                    <span
+                      className='absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full'
+                      style={{ backgroundColor: selectedTicket.queue.color }}
+                    />
+                  )}
+                </button>
+                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+                  Fila: {queueLabel}
+                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+                </div>
                 {showQueueMenu && (
-                  <div className='absolute right-0 z-10 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 text-left shadow-lg'>
+                  <div className='absolute left-0 top-full z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 text-left shadow-lg dark:border-slate-700 dark:bg-slate-800'>
                     <button
                       onClick={() => handleQueueChange(null)}
-                      className='flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100'
+                      className='flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700'
                     >
                       Remover fila
                     </button>
-                    <div className='my-1 border-t border-gray-100' />
+                    <div className='my-1 border-t border-gray-100 dark:border-slate-700/60' />
                     {queues.map((queue) => (
                       <button
                         key={queue.id}
                         onClick={() => handleQueueChange(queue.id)}
-                        className='flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100'
+                        className='flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs text-left text-gray-600 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700'
                       >
                         <span className='h-2 w-2 rounded-full' style={{ backgroundColor: queue.color }} />
                         {queue.name}
@@ -1288,26 +1434,29 @@ export default function ChatArea() {
                 )}
               </div>
 
-              <div className='relative'>
+              <div className='relative group'>
                 <button
                   type='button'
                   ref={tagButtonRef}
                   onClick={() => setIsTagMenuOpen((prev) => !prev)}
-                  className='inline-flex items-center gap-1 rounded-lg border border-dashed border-primary px-2 py-1 text-[10px] font-semibold text-primary transition hover:bg-primary/10'
+                  className='flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-primary text-primary transition hover:bg-primary/10 dark:text-primary'
+                  aria-label='Gerenciar tags'
                 >
-                  <TagIcon size={11} />
-                  Tags
+                  <TagIcon size={14} />
                 </button>
-
+                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+                  Gerenciar tags
+                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+                </div>
                 {isTagMenuOpen && (
                   <div
                     ref={tagMenuRef}
-                    className='absolute left-0 z-40 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-xl'
+                    className='absolute left-0 z-40 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800'
                   >
-                    <p className='text-[10px] font-semibold uppercase text-gray-400'>Selecione tags</p>
+                    <p className='text-[10px] font-semibold uppercase text-gray-400 dark:text-slate-400'>Selecione tags</p>
                     <div className='mt-2 flex flex-col gap-1'>
                       {tags.length === 0 ? (
-                        <span className='text-[11px] text-gray-500'>Nenhuma tag cadastrada.</span>
+                        <span className='text-[11px] text-gray-500 dark:text-slate-400'>Nenhuma tag cadastrada.</span>
                       ) : (
                         tags.map((tag) => {
                           const active = activeTagIds.includes(tag.id);
@@ -1319,7 +1468,7 @@ export default function ChatArea() {
                               className={`flex items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition ${
                                 active
                                   ? 'bg-primary text-white'
-                                  : 'border border-gray-200 text-gray-600 hover:bg-gray-100'
+                                  : 'border border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700'
                               }`}
                             >
                               <span className='h-2.5 w-2.5 rounded-full' style={{ backgroundColor: tag.color }} />
@@ -1332,44 +1481,101 @@ export default function ChatArea() {
                   </div>
                 )}
               </div>
+
+              <div className='group relative'>
+                <button
+                  type='button'
+                  onClick={handleToggleBlockContact}
+                  disabled={!selectedContact || contactLoading || blockingContact}
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg border transition ${
+                    contactBlocked
+                      ? 'border-red-200 text-red-600 hover:bg-red-50 disabled:hover:bg-transparent dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10'
+                      : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 disabled:hover:bg-transparent dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10'
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                  aria-label={contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+                >
+                  {contactBlocked ? <Lock size={14} /> : <Unlock size={14} />}
+                </button>
+                <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+                  {contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+                  <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+                </div>
+              </div>
             </div>
+          </div>
+          <div className='flex items-center gap-2'>
+            <div className='group relative'>
+              <button
+                onClick={handleExportConversation}
+                className='flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
+                aria-label='Exportar conversa'
+              >
+                <Download size={14} />
+              </button>
+              <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+                Exportar conversa
+                <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+              </div>
+            </div>
+
+            <div className='group relative'>
+              <button
+                type='button'
+                onClick={openCarPlateEditor}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                  selectedTicket.carPlate
+                    ? `border-emerald-500 bg-emerald-50 text-emerald-700${
+                        isCarPlateEditorOpen ? '' : ' animate-pulse hover:animate-none'
+                      }`
+                    : 'border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary'
+                }`}
+                aria-label={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
+              >
+                <Car size={14} />
+                {selectedTicket.carPlate ? (
+                  <span className='font-mono text-xs uppercase tracking-wider'>{selectedTicket.carPlate}</span>
+                ) : (
+                  <span className='text-[11px] font-semibold'>Adicionar placa</span>
+                )}
+              </button>
+              <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
+                {selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
+                <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
+              </div>
+            </div>
+
+            {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
+              <button
+                onClick={handleAcceptTicket}
+                className='rounded-lg bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary/90'
+              >
+                Aceitar
+              </button>
+            )}
+
+            {selectedTicket.status === 'OPEN' && (
+              <button
+                onClick={handleCloseTicket}
+                className='rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-600'
+              >
+                Finalizar
+              </button>
+            )}
+
+            {selectedTicket.status === 'CLOSED' && (
+              <button
+                onClick={handleCreateFollowUpTicket}
+                disabled={creatingFollowUpTicket}
+                className='inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60'
+              >
+                {creatingFollowUpTicket ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus size={14} />}
+                Criar novo ticket
+              </button>
+            )}
+
           </div>
         </div>
-
-        <div className='flex items-center gap-2'>
-          <button
-            onClick={handleExportConversation}
-            className='inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100'
-          >
-            <Download size={14} />
-            Exportar
-          </button>
-
-          <div className='group relative'>
-            <button
-              type='button'
-              onClick={openCarPlateEditor}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-                selectedTicket.carPlate
-                  ? `border-emerald-500 bg-emerald-50 text-emerald-700${
-                      isCarPlateEditorOpen ? '' : ' animate-pulse hover:animate-none'
-                    }`
-                  : 'border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary'
-              }`}
-              aria-label={selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
-            >
-              <Car size={14} />
-              {selectedTicket.carPlate ? (
-                <span className='font-mono text-xs uppercase tracking-wider'>{selectedTicket.carPlate}</span>
-              ) : (
-                <span className='text-[11px] font-semibold'>Adicionar placa</span>
-              )}
-            </button>
-            <div className='pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-slate-700'>
-              {selectedTicket.carPlate ? 'Editar placa do carro' : 'Inserir placa do carro'}
-              <div className='absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full border-4 border-transparent border-b-gray-900 dark:border-b-slate-700' />
-            </div>
-          </div>
+      </div>
 
           {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
             <button

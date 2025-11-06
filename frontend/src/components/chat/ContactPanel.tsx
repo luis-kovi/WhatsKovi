@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { StickyNote, Plus, X, Clock3, Phone, Tags, ChevronRight, Lock, Unlock } from 'lucide-react';
+import { StickyNote, Plus, X, Clock3, Tags, ChevronRight } from 'lucide-react';
 
 import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote, ContactTicketSummary } from '@/store/contactStore';
@@ -46,13 +46,6 @@ const RECURRENCE_LABELS: Record<string, string> = {
   DAILY: 'Diaria',
   WEEKLY: 'Semanal',
   MONTHLY: 'Mensal'
-};
-
-const TICKET_STATUS_STYLES: Record<string, string> = {
-  BOT: 'bg-indigo-100 text-indigo-600',
-  PENDING: 'bg-amber-100 text-amber-600',
-  OPEN: 'bg-sky-100 text-sky-600',
-  CLOSED: 'bg-slate-200 text-slate-600'
 };
 
 const CONNECTION_LABEL: Record<string, string> = {
@@ -417,22 +410,20 @@ export default function ContactPanel() {
     selectedTicket: state.selectedTicket,
     selectTicket: state.selectTicket
   }));
-  const {
-    selectedContact,
-    loadContact,
-    updateContact,
-    loading,
-    clearSelected,
-    notes,
-    fetchContactNotes,
-    createNote: createContactNote
+const {
+  selectedContact,
+  loadContact,
+  loading,
+  clearSelected,
+  notes,
+  fetchContactNotes,
+  createNote: createContactNote
   } = useContactStore((state) => ({
-    selectedContact: state.selectedContact,
-    loadContact: state.loadContact,
-    updateContact: state.updateContact,
-    loading: state.loading,
-    clearSelected: state.clearSelected,
-    notes: state.notes,
+  selectedContact: state.selectedContact,
+  loadContact: state.loadContact,
+  loading: state.loading,
+  clearSelected: state.clearSelected,
+  notes: state.notes,
     fetchContactNotes: state.fetchContactNotes,
     createNote: state.createNote
   }));
@@ -539,14 +530,6 @@ export default function ContactPanel() {
     [dashboard, metadataLoading]
   );
 
-  const handleToggleBlock = async () => {
-    if (!selectedContact) return;
-    await updateContact(selectedContact.id, { isBlocked: !selectedContact.isBlocked });
-    toast.success(
-      selectedContact.isBlocked ? 'Contato desbloqueado com sucesso.' : 'Contato bloqueado para novos atendimentos.'
-    );
-  };
-
   const handleCreateNote = async (content: string) => {
     if (!selectedContact) return;
     const trimmed = content.trim();
@@ -620,62 +603,6 @@ export default function ContactPanel() {
                 </div>
               </div>
             </section>
-            <section className={PANEL_CARD_CLASS}>
-              <header className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{contactName}</p>
-                  <div className="mt-1 space-y-1 text-[11px] text-gray-500">
-                    <span className="inline-flex items-center gap-1">
-                      <Phone className="h-3.5 w-3.5 text-primary" />
-                      {contactPhone}
-                    </span>
-                    {selectedContact.email && <span className="block break-all">{selectedContact.email}</span>}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleBlock}
-                  className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border transition ${
-                    selectedContact.isBlocked
-                      ? 'border-red-300 text-red-600 hover:bg-red-50'
-                      : 'border-emerald-300 text-emerald-600 hover:bg-emerald-50'
-                  }`}
-                  title={selectedContact.isBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
-                  aria-label={selectedContact.isBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
-                >
-                  {selectedContact.isBlocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                </button>
-              </header>
-              <div className={PANEL_SCROLL_WRAPPER}>
-                <div className={`${PANEL_SCROLL_AREA} text-[12px] text-gray-600`}>
-                  <div className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase text-gray-500">Status do contato</span>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                          selectedContact.isBlocked ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'
-                        }`}
-                      >
-                        {selectedContact.isBlocked ? 'Bloqueado' : 'Ativo'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase text-gray-500">Status do ticket</span>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                          TICKET_STATUS_STYLES[selectedTicket.status] ?? 'bg-slate-200 text-slate-600'
-                        }`}
-                      >
-                        {STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             <section className={PANEL_CARD_CLASS}>
               <header className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
