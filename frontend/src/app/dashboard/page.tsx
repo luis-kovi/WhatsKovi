@@ -61,32 +61,17 @@ export default function DashboardPage() {
     );
   }
 
-  const scaleFactor = 0.67;
-  const scaledSize = `${(100 / scaleFactor).toFixed(6)}%`;
-
   return (
-    <div className="flex h-screen overflow-auto bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
-      <div
-        className="flex h-full w-full"
-        style={{
-          transform: `scale(${scaleFactor})`,
-          transformOrigin: 'top left',
-          width: scaledSize,
-          minWidth: scaledSize,
-          height: scaledSize,
-          minHeight: scaledSize
-        }}
-      >
-        <Sidebar />
-        <div className="ml-20 flex flex-1 flex-col overflow-hidden">
-          <main className="flex flex-1 overflow-hidden">
-            <div className="flex flex-1 overflow-hidden">
-              <TicketList />
-              <ChatArea />
-              <ContactPanel />
-            </div>
-          </main>
-        </div>
+    <div className="flex h-screen overflow-hidden bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
+      <Sidebar />
+      <div className="ml-20 flex flex-1 flex-col overflow-hidden">
+        <main className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1 overflow-hidden">
+            <TicketList />
+            <ChatArea />
+            <ContactPanel />
+          </div>
+        </main>
       </div>
     </div>
   );
