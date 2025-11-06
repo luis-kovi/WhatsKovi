@@ -535,18 +535,6 @@ const {
     ? 'border border-red-200 bg-red-100 text-red-600'
     : 'border border-emerald-200 bg-emerald-100 text-emerald-600';
 
-  const ticketStatusLabel = STATUS_LABELS[ticket.status] ?? ticket.status;
-  const ticketStatusClass = TICKET_STATUS_STYLES[ticket.status] ?? 'bg-slate-200 text-slate-600';
-
-  const ticketTypeLabel = TICKET_TYPE_LABELS[ticket.type] ?? ticket.type;
-  const ticketTypeClass = TICKET_TYPE_STYLES[ticket.type] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
-
-  const currentPriority = ticket.priority ?? 'LOW';
-  const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
-  const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
-
-  const queueLabel = ticket.queue ? ticket.queue.name : 'Sem fila';
-
   const handleCreateNote = async (content: string) => {
     if (!selectedContact) return;
     const trimmed = content.trim();
@@ -710,6 +698,14 @@ const {
   }
 
   const ticket = selectedTicket;
+  const ticketStatusLabel = STATUS_LABELS[ticket.status] ?? ticket.status;
+  const ticketStatusClass = TICKET_STATUS_STYLES[ticket.status] ?? 'bg-slate-200 text-slate-600';
+  const ticketTypeLabel = TICKET_TYPE_LABELS[ticket.type] ?? ticket.type;
+  const ticketTypeClass = TICKET_TYPE_STYLES[ticket.type] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
+  const currentPriority = ticket.priority ?? 'LOW';
+  const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
+  const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
+  const queueLabel = ticket.queue ? ticket.queue.name : 'Sem fila';
   const contactName = ticket.contact.name;
   const contactPhone = ticket.contact.phoneNumber;
   const ticketReference = ticket.id.slice(0, 8).toUpperCase();
