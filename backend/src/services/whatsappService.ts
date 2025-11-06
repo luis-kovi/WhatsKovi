@@ -266,7 +266,9 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
         ? 'VIDEO'
         : msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice'
         ? 'AUDIO'
-        : String(msg.type || 'TEXT').toUpperCase();
+        : msg.type === 'document'
+        ? 'DOCUMENT'
+        : 'TEXT';
 
     const prismaMessage = await prisma.message.create({
       data: {
