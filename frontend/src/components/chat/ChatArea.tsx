@@ -44,18 +44,6 @@ const PRIORITY_OPTIONS = [
   { value: 'URGENT', label: 'Urgente' }
 ];
 
-const SENTIMENT_LABELS: Record<'POSITIVE' | 'NEUTRAL' | 'NEGATIVE', string> = {
-  POSITIVE: 'Positivas',
-  NEUTRAL: 'Neutras',
-  NEGATIVE: 'Negativas'
-};
-
-const SENTIMENT_STYLES: Record<'POSITIVE' | 'NEUTRAL' | 'NEGATIVE', string> = {
-  POSITIVE: 'bg-emerald-100 text-emerald-700',
-  NEUTRAL: 'bg-slate-200 text-slate-700',
-  NEGATIVE: 'bg-rose-100 text-rose-700'
-};
-
 type ChannelOption = {
   value: MessageChannel;
   label: string;
@@ -232,7 +220,6 @@ export default function ChatArea() {
     createManualTicket,
     aiSuggestionsByMessage,
     aiChatbotDrafts,
-    aiInsightsByTicket,
     regenerateSuggestions,
     previewChatbotReply
   } = useTicketStore((state) => ({
@@ -245,7 +232,6 @@ export default function ChatArea() {
     createManualTicket: state.createManualTicket,
     aiSuggestionsByMessage: state.aiSuggestionsByMessage,
     aiChatbotDrafts: state.aiChatbotDrafts,
-    aiInsightsByTicket: state.aiInsightsByTicket,
     regenerateSuggestions: state.regenerateSuggestions,
     previewChatbotReply: state.previewChatbotReply
   }));
@@ -439,11 +425,6 @@ export default function ChatArea() {
   const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-
-  const ticketInsights = useMemo(
-    () => (selectedTicket ? aiInsightsByTicket[selectedTicket.id] : undefined),
-    [aiInsightsByTicket, selectedTicket]
-  );
 
   const latestCustomerMessage = useMemo(() => {
     if (!selectedTicket || visibleMessages.length === 0) {
@@ -1423,64 +1404,6 @@ export default function ChatArea() {
       </div>
 
       <div className='flex-1 space-y-4 overflow-y-auto bg-gray-100 px-5 py-4 transition-colors duration-300 dark:bg-slate-900'>
-        {ticketInsights && (
-          <div className='rounded-2xl border border-primary/20 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:bg-slate-800/60'>
-            <div className='flex flex-wrap items-center justify-between gap-3'>
-              <div>
-                <p className='text-xs font-semibold uppercase tracking-wide text-primary'>Resumo inteligente</p>
-                {ticketInsights.classification ? (
-                  <p className='text-sm text-gray-700 dark:text-gray-200'>
-                    Classificação automática:{' '}
-                    <span className='font-semibold capitalize text-primary'>
-                      {ticketInsights.classification.category.replace(/_/g, ' ')}
-                    </span>
-                    {typeof ticketInsights.classification.confidence === 'number'
-                      ? ` (${Math.round(ticketInsights.classification.confidence * 100)}% confiança)`
-                      : ''}
-                  </p>
-                ) : (
-                  <p className='text-sm text-gray-500 dark:text-gray-400'>
-                    Ainda sem classificação automática para este atendimento.
-                  </p>
-                )}
-              </div>
-              {ticketInsights.classification?.keywords?.length ? (
-                <div className='flex flex-wrap gap-2 text-[11px] font-semibold text-primary'>
-                  {ticketInsights.classification.keywords.slice(0, 4).map((keyword) => (
-                    <span key={keyword} className='rounded-full bg-primary/10 px-2 py-1'>
-                      #{keyword}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            {ticketInsights.sentiment && (
-              <div className='mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300'>
-                {(['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as const).map((label) => {
-                  const count = ticketInsights.sentiment?.totals?.[label] ?? 0;
-                  return (
-                    <span
-                      key={label}
-                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${SENTIMENT_STYLES[label]}`}
-                    >
-                      {SENTIMENT_LABELS[label]}: {count}
-                    </span>
-                  );
-                })}
-                {ticketInsights.sentiment.last && (
-                  <span className='ml-auto text-xs font-normal text-gray-500 dark:text-gray-400'>
-                    Última análise:{' '}
-                    {ticketInsights.sentiment.last.summary
-                      ? `"${ticketInsights.sentiment.last.summary}"`
-                      : SENTIMENT_LABELS[
-                          ticketInsights.sentiment.last.sentiment as 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
-                        ]}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
         {!messagesLoaded ? (
           <div className='flex h-full items-center justify-center text-sm text-gray-500'>
             <Loader2 className='mr-2 h-4 w-4 animate-spin' />
