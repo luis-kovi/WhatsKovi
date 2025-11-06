@@ -535,17 +535,17 @@ const {
     ? 'border border-red-200 bg-red-100 text-red-600'
     : 'border border-emerald-200 bg-emerald-100 text-emerald-600';
 
-  const ticketStatusLabel = STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status;
-  const ticketStatusClass = TICKET_STATUS_STYLES[selectedTicket.status] ?? 'bg-slate-200 text-slate-600';
+  const ticketStatusLabel = STATUS_LABELS[ticket.status] ?? ticket.status;
+  const ticketStatusClass = TICKET_STATUS_STYLES[ticket.status] ?? 'bg-slate-200 text-slate-600';
 
-  const ticketTypeLabel = TICKET_TYPE_LABELS[selectedTicket.type] ?? selectedTicket.type;
-  const ticketTypeClass = TICKET_TYPE_STYLES[selectedTicket.type] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
+  const ticketTypeLabel = TICKET_TYPE_LABELS[ticket.type] ?? ticket.type;
+  const ticketTypeClass = TICKET_TYPE_STYLES[ticket.type] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
 
-  const currentPriority = selectedTicket.priority ?? 'LOW';
+  const currentPriority = ticket.priority ?? 'LOW';
   const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
   const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
 
-  const queueLabel = selectedTicket.queue ? selectedTicket.queue.name : 'Sem fila';
+  const queueLabel = ticket.queue ? ticket.queue.name : 'Sem fila';
 
   const handleCreateNote = async (content: string) => {
     if (!selectedContact) return;
@@ -709,10 +709,11 @@ const {
     );
   }
 
-  const contactName = selectedTicket.contact.name;
-  const contactPhone = selectedTicket.contact.phoneNumber;
-  const ticketReference = selectedTicket.id.slice(0, 8).toUpperCase();
-  const carPlateDisplay = selectedTicket.carPlate ? selectedTicket.carPlate : 'Nao cadastrada';
+  const ticket = selectedTicket as NonNullable<typeof selectedTicket>;
+  const contactName = ticket.contact.name;
+  const contactPhone = ticket.contact.phoneNumber;
+  const ticketReference = ticket.id.slice(0, 8).toUpperCase();
+  const carPlateDisplay = ticket.carPlate ? ticket.carPlate : 'Nao cadastrada';
   return (
     <>
       <aside className="hidden w-96 flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex">
@@ -764,11 +765,11 @@ const {
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <span className="text-[10px] font-semibold uppercase text-gray-500">Fila</span>
                   <span className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                    {selectedTicket.queue ? (
+                    {ticket.queue ? (
                       <>
                         <span
                           className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: selectedTicket.queue.color }}
+                          style={{ backgroundColor: ticket.queue.color }}
                         />
                         {queueLabel}
                       </>
@@ -801,7 +802,7 @@ const {
                       className="inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10"
                     >
                       <Car size={14} />
-                        {selectedTicket.carPlate ? 'Editar' : 'Adicionar'}
+                      {ticket.carPlate ? 'Editar' : 'Adicionar'}
                     </button>
                   </div>
                 </div>
@@ -950,7 +951,7 @@ const {
                   {contactBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
                 </button>
 
-                {selectedTicket.status === 'OPEN' && (
+                {ticket.status === 'OPEN' && (
                   <button
                     type="button"
                     onClick={handleFinalizeTicket}
@@ -960,7 +961,7 @@ const {
                   </button>
                 )}
 
-                {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'BOT') && (
+                {(ticket.status === 'PENDING' || ticket.status === 'BOT') && (
                   <button
                     type="button"
                     onClick={handleAcceptTicket}
