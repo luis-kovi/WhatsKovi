@@ -6,7 +6,6 @@ import { StickyNote, Plus, X, Clock3, Tags, ChevronRight } from 'lucide-react';
 
 import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote, ContactTicketSummary } from '@/store/contactStore';
-import { useMetadataStore } from '@/store/metadataStore';
 
 const STATUS_LABELS: Record<string, string> = {
   BOT: 'Chatbot',
@@ -24,26 +23,6 @@ const PANEL_CARD_CLASS =
   'flex h-[150px] flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm';
 const PANEL_SCROLL_WRAPPER = 'mt-2 flex-1 overflow-hidden';
 const PANEL_SCROLL_AREA = 'h-full space-y-1.5 overflow-y-auto pr-1';
-
-const CONNECTION_LABEL: Record<string, string> = {
-  CONNECTED: 'Conectado',
-  CONNECTING: 'Conectando',
-  DISCONNECTED: 'Desconectado'
-};
-
-const CONNECTION_COLOR: Record<string, string> = {
-  CONNECTED: 'bg-emerald-500',
-  CONNECTING: 'bg-amber-400',
-  DISCONNECTED: 'bg-gray-400'
-};
-
-const numberFormatter = new Intl.NumberFormat('pt-BR');
-
-const formatMetricValue = (value?: number | null, loading?: boolean) => {
-  if (loading) return '...';
-  if (typeof value !== 'number') return '--';
-  return numberFormatter.format(value);
-};
 
 const formatDateTime = (isoDate: string) => {
   try {
@@ -371,12 +350,6 @@ const {
     createNote: state.createNote
   }));
 
-  const { dashboard, connections, loading: metadataLoading } = useMetadataStore((state) => ({
-    dashboard: state.dashboard,
-    connections: state.connections,
-    loading: state.loading
-  }));
-
   const [noteDetail, setNoteDetail] = useState<ContactInternalNote | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
@@ -405,61 +378,6 @@ const {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [selectedContact]);
-
-  const connectionInfo = useMemo(() => {
-    if (metadataLoading) {
-      return {
-        label: 'Carregando...',
-        detail: '',
-        color: 'bg-gray-400'
-      };
-    }
-
-    if (connections.length === 0) {
-      return {
-        label: 'Sem conexao',
-        detail: 'Adicione uma conexao WhatsApp',
-        color: 'bg-gray-400'
-      };
-    }
-
-    const primary =
-      connections.find((connection) => connection.isDefault) ??
-      connections.find((connection) => connection.status === 'CONNECTED') ??
-      connections[0];
-
-    const label = CONNECTION_LABEL[primary.status] ?? primary.status;
-    const color = CONNECTION_COLOR[primary.status] ?? 'bg-gray-400';
-    const detail = primary.phoneNumber ? `+${primary.phoneNumber}` : 'Numero nao vinculado';
-
-    return { label, detail, color };
-  }, [connections, metadataLoading]);
-
-  const dashboardMetrics = useMemo(
-    () => [
-      {
-        key: 'agents-online',
-        label: 'Agentes Online',
-        value: formatMetricValue(dashboard?.agents.online ?? null, metadataLoading)
-      },
-      {
-        key: 'tickets-open',
-        label: 'Em atendimento',
-        value: formatMetricValue(dashboard?.tickets.open ?? null, metadataLoading)
-      },
-      {
-        key: 'tickets-pending',
-        label: 'Pendentes',
-        value: formatMetricValue(dashboard?.tickets.pending ?? null, metadataLoading)
-      },
-      {
-        key: 'tickets-bot',
-        label: 'No Chatbot',
-        value: formatMetricValue(dashboard?.tickets.bot ?? null, metadataLoading)
-      }
-    ],
-    [dashboard, metadataLoading]
-  );
 
   const handleCreateNote = async (content: string) => {
     if (!selectedContact) return;
@@ -509,31 +427,6 @@ const {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <section className="flex flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-              <header className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-800">Visao geral</h3>
-              </header>
-              <div className="mt-3 space-y-3">
-                <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                  <span className="text-[11px] font-semibold uppercase text-gray-500">Status da conexao</span>
-                  <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <span className={`h-2.5 w-2.5 rounded-full ${connectionInfo.color}`} />
-                    {metadataLoading ? '...' : connectionInfo.label}
-                  </div>
-                  {connectionInfo.detail && !metadataLoading && (
-                    <p className="mt-1 text-[11px] text-gray-500">{connectionInfo.detail}</p>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {dashboardMetrics.map((metric) => (
-                    <div key={metric.key} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                      <span className="text-[11px] font-semibold uppercase text-gray-500">{metric.label}</span>
-                      <p className="mt-1 text-sm font-semibold text-gray-900">{metric.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
             <section className={PANEL_CARD_CLASS}>
               <header className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">

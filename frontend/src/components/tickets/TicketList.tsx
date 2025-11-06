@@ -19,6 +19,20 @@ const STATUS_OPTIONS = [
   { value: 'CLOSED', label: 'Finalizados' }
 ];
 
+const numberFormatter = new Intl.NumberFormat('pt-BR');
+
+const CONNECTION_LABEL: Record<string, string> = {
+  CONNECTED: 'Conectado',
+  CONNECTING: 'Conectando',
+  DISCONNECTED: 'Desconectado'
+};
+
+const CONNECTION_COLOR: Record<string, string> = {
+  CONNECTED: 'bg-emerald-500',
+  CONNECTING: 'bg-amber-400',
+  DISCONNECTED: 'bg-gray-400'
+};
+
 const SORT_OPTIONS = [
   { value: 'recent', label: 'Mais recentes' },
   { value: 'unread', label: 'Nao lidos primeiro' },
@@ -219,10 +233,23 @@ export default function TicketList() {
     createManualTicket: state.createManualTicket
   }));
 
-  const queues = useMetadataStore((state) => state.queues);
-  const tags = useMetadataStore((state) => state.tags);
-  const fetchQueues = useMetadataStore((state) => state.fetchQueues);
-  const fetchTags = useMetadataStore((state) => state.fetchTags);
+  const {
+    queues,
+    tags,
+    connections,
+    dashboard,
+    metadataLoading,
+    fetchQueues,
+    fetchTags
+  } = useMetadataStore((state) => ({
+    queues: state.queues,
+    tags: state.tags,
+    connections: state.connections,
+    dashboard: state.dashboard,
+    metadataLoading: state.loading,
+    fetchQueues: state.fetchQueues,
+    fetchTags: state.fetchTags
+  }));
 
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -261,6 +288,64 @@ export default function TicketList() {
       : null;
   const hasActiveFilters =
     Boolean(searchTerm.trim()) || filterBadgeCount > 0 || Boolean(sortOption);
+
+  const isTicketsLoading = loading && tickets.length === 0;
+
+  const connectionStatus = useMemo(() => {
+    if (metadataLoading) {
+      return { label: 'Carregando...', color: 'bg-gray-400' };
+    }
+
+    if (connections.length === 0) {
+      return { label: 'Sem conexao', color: 'bg-gray-400' };
+    }
+
+    const primary =
+      connections.find((connection) => connection.isDefault) ??
+      connections.find((connection) => connection.status === 'CONNECTED') ??
+      connections[0];
+
+    const label = CONNECTION_LABEL[primary.status] ?? primary.status;
+    const color = CONNECTION_COLOR[primary.status] ?? 'bg-gray-400';
+
+    return { label, color };
+  }, [connections, metadataLoading]);
+
+  const overviewMetrics = useMemo(() => {
+    const botCount = tickets.reduce((total, ticket) => (ticket.status === 'BOT' ? total + 1 : total), 0);
+    const botFromDashboard =
+      typeof dashboard?.tickets?.bot === 'number' ? dashboard.tickets.bot : null;
+    const botLoading = metadataLoading || (botFromDashboard === null && isTicketsLoading);
+
+    const getDisplayValue = (value: number | null | undefined, pending: boolean) => {
+      if (pending) return '...';
+      if (typeof value !== 'number') return '--';
+      return numberFormatter.format(value);
+    };
+
+    return [
+      {
+        key: 'agents-online',
+        label: 'Agentes online',
+        displayValue: getDisplayValue(dashboard?.agents?.online ?? null, metadataLoading)
+      },
+      {
+        key: 'tickets-open',
+        label: 'Em atendimento',
+        displayValue: getDisplayValue(dashboard?.tickets?.open ?? null, metadataLoading)
+      },
+      {
+        key: 'tickets-pending',
+        label: 'Pendentes',
+        displayValue: getDisplayValue(dashboard?.tickets?.pending ?? null, metadataLoading)
+      },
+      {
+        key: 'tickets-bot',
+        label: 'No chatbot',
+        displayValue: getDisplayValue(botFromDashboard ?? botCount, botLoading)
+      }
+    ];
+  }, [dashboard, metadataLoading, tickets, isTicketsLoading]);
 
 
   useEffect(() => {
@@ -448,6 +533,24 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     <>
       <div className="flex w-[420px] flex-col border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase text-gray-500">Status da conexao</span>
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <span className={`h-2.5 w-2.5 rounded-full ${connectionStatus.color}`} />
+                {metadataLoading ? '...' : connectionStatus.label}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {overviewMetrics.map((metric) => (
+                <div key={metric.key} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-2">
+                  <span className="block text-[10px] font-semibold uppercase text-gray-500">{metric.label}</span>
+                  <span className="mt-1 block text-sm font-semibold text-gray-900">{metric.displayValue}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <hr className="my-4 border-gray-200" />
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-bold text-gray-800">Atendimentos</h2>
             <div className="flex items-center gap-2">
