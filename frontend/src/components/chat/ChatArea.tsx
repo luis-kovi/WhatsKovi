@@ -24,7 +24,8 @@ import {
   Layers,
   Flag,
   Lock,
-  Unlock
+  Unlock,
+  Clock3
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
@@ -32,12 +33,14 @@ import { useMessages } from '@/hooks/useMessages';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuthStore } from '@/store/authStore';
 import { useContactStore } from '@/store/contactStore';
+import { useScheduledMessageStore } from '@/store/scheduledMessageStore';
 import { MessageItem } from '@/components/chat/MessageItem';
 import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
 import { fetchMultichannelCapabilities, MultichannelCapabilities } from '@/services/multichannel';
 import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
+import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 
@@ -237,6 +240,40 @@ function MessageDeleteModal({ message, deleting, onClose, onConfirm }: MessageDe
   );
 }
 
+type ScheduledMessagesModalProps = {
+  open: boolean;
+  ticketId: string;
+  contactName: string;
+  onClose: () => void;
+};
+
+function ScheduledMessagesModal({ open, ticketId, contactName, onClose }: ScheduledMessagesModalProps) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-10">
+      <div className="w-full max-w-4xl rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Mensagens agendadas</h3>
+            <p className="text-sm text-gray-500">Gerencie os envios programados para {contactName}.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+          <ScheduledMessageSection ticketId={ticketId} contactName={contactName} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatArea() {
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id;
@@ -280,6 +317,11 @@ export default function ChatArea() {
     selectedContact: state.selectedContact,
     updateContact: state.updateContact,
     loading: state.loading
+  }));
+
+  const { itemsByTicket: scheduledByTicket, fetchScheduledMessages } = useScheduledMessageStore((state) => ({
+    itemsByTicket: state.itemsByTicket,
+    fetchScheduledMessages: state.fetchScheduledMessages
   }));
 
   const {
@@ -332,6 +374,7 @@ export default function ChatArea() {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [creatingFollowUpTicket, setCreatingFollowUpTicket] = useState(false);
   const [blockingContact, setBlockingContact] = useState(false);
+  const [scheduledModalOpen, setScheduledModalOpen] = useState(false);
   const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<TicketMessage | null>(null);
   const [editingBody, setEditingBody] = useState('');
@@ -398,6 +441,13 @@ export default function ChatArea() {
       setCarPlateSaving(false);
     }
   };
+
+  const scheduledMessages = useMemo(() => {
+    if (!selectedTicket) return [];
+    return scheduledByTicket[selectedTicket.id] ?? [];
+  }, [scheduledByTicket, selectedTicket]);
+
+  const hasScheduledMessages = scheduledMessages.length > 0;
 
   const contactEmail = (
     selectedContact?.email ?? selectedTicket?.contact.email ?? ''
@@ -661,6 +711,10 @@ export default function ChatArea() {
   }, [showPriorityMenu]);
   useEffect(() => {
     setIsAiSuggestionsVisible(false);
+  }, [selectedTicket?.id]);
+
+  useEffect(() => {
+    setScheduledModalOpen(false);
   }, [selectedTicket?.id]);
 
   useEffect(() => {
@@ -1151,6 +1205,19 @@ export default function ChatArea() {
     } finally {
       setIsGeneratingDraft(false);
     }
+  };
+
+  const handleOpenScheduledModal = async () => {
+    if (!selectedTicket || isTicketClosed) return;
+    setShowEmojiPicker(false);
+    setQuickReplyModalOpen(false);
+    try {
+      await fetchScheduledMessages(selectedTicket.id);
+    } catch (error) {
+      console.error('Erro ao carregar mensagens agendadas:', error);
+      toast.error('Nao foi possivel carregar as mensagens agendadas.');
+    }
+    setScheduledModalOpen(true);
   };
 
   const handleUseChatbotDraft = () => {
@@ -1796,107 +1863,112 @@ export default function ChatArea() {
         )}
 
         <form onSubmit={handleSendMessage} className='flex flex-col gap-3'>
-          <div className='flex items-stretch gap-3'>
-            <div className='flex flex-col gap-2'>
-              <div className='relative flex flex-col gap-2'>
-                <button
-                  type='button'
-                  ref={emojiButtonRef}
-                  onClick={() => {
-                    setShowEmojiPicker((prev) => !prev);
-                    setQuickReplyModalOpen(false);
-                  }}
-                  disabled={isTicketClosed}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border text-gray-500 transition ${
-                    showEmojiPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:bg-gray-100'
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                >
-                  <Smile size={18} />
-                </button>
-                <button
-                  type='button'
-                  onClick={handleFileButtonClick}
-                  disabled={isTicketClosed || uploadingFile}
-                  className='flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
-                >
-                  {uploadingFile ? <Loader2 className='h-4 w-4 animate-spin' /> : <Paperclip size={18} />}
-                </button>
-                <button
-                  type='button'
-                  onClick={handleToggleRecording}
-                  disabled={isTicketClosed || uploadingFile}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
-                    isRecording
-                      ? 'border-red-400 bg-red-50 text-red-500 hover:bg-red-100'
-                      : 'border-gray-200 text-gray-500 hover:bg-gray-100'
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                >
-                  <Mic size={18} />
-                </button>
-
-                {showEmojiPicker && (
-                  <div
-                    ref={emojiPickerRef}
-                    className='absolute bottom-14 left-0 z-50 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl'
-                  >
-                    <EmojiPicker data={data} onEmojiSelect={handleEmojiSelect} locale='pt' theme='light' />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className='flex flex-1 gap-3'>
+          <div className='flex flex-1 gap-3'>
+            <div className='relative flex-1'>
               <textarea
                 ref={textareaRef}
                 value={newMessage}
                 onChange={(event) => setNewMessage(event.target.value)}
                 onKeyDown={(event) => handleTextareaKeyDown(event)}
                 rows={isPrivate ? 4 : 3}
-                placeholder={isTicketClosed ? 'Atendimento encerrado' : isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'}
+                placeholder={
+                  isTicketClosed ? 'Atendimento encerrado' : isPrivate ? 'Escreva uma nota interna...' : 'Digite sua mensagem...'
+                }
                 disabled={isTicketClosed}
-                className='h-full min-h-[128px] flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:bg-gray-100'
+                className='h-full min-h-[128px] w-full resize-none rounded-xl border border-gray-300 px-4 pr-12 py-3 text-sm text-gray-700 shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:bg-gray-100'
               />
-              <div className='flex w-[120px] flex-col gap-2'>
-                <button
-                  type='button'
-                  onClick={async () => {
-                    if (isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body) return;
-                    await handleGenerateChatbotReply();
-                  }}
-                  disabled={isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body}
-                  className='flex h-10 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white shadow transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400'
+              <button
+                type='submit'
+                disabled={isTicketClosed || isSending || !newMessage.trim()}
+                className='absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/40'
+                aria-label='Enviar mensagem'
+                title='Enviar mensagem'
+              >
+                {isSending ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
+              </button>
+            </div>
+            <div className='relative flex w-12 flex-col items-center gap-2'>
+              <button
+                type='button'
+                ref={emojiButtonRef}
+                onClick={() => {
+                  setShowEmojiPicker((prev) => !prev);
+                  setQuickReplyModalOpen(false);
+                }}
+                disabled={isTicketClosed}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
+                  showEmojiPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+                title='Emoji'
+              >
+                <Smile size={18} />
+              </button>
+              <button
+                type='button'
+                onClick={handleFileButtonClick}
+                disabled={isTicketClosed || uploadingFile}
+                className='flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
+                title='Anexar arquivo'
+              >
+                {uploadingFile ? <Loader2 className='h-4 w-4 animate-spin' /> : <Paperclip size={18} />}
+              </button>
+              <button
+                type='button'
+                onClick={handleToggleRecording}
+                disabled={isTicketClosed || uploadingFile}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
+                  isRecording
+                    ? 'border-red-400 bg-red-50 text-red-500 hover:bg-red-100'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+                title='Gravar áudio'
+              >
+                <Mic size={18} />
+              </button>
+              <button
+                type='button'
+                onClick={async () => {
+                  if (isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body) return;
+                  await handleGenerateChatbotReply();
+                }}
+                disabled={isTicketClosed || isGeneratingDraft || !latestCustomerMessage?.body}
+                className='flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-not-allowed disabled:bg-violet-400'
+                title='IA responde'
+              >
+                {isGeneratingDraft ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles size={16} />}
+              </button>
+              <button
+                type='button'
+                onClick={() => {
+                  if (isTicketClosed) return;
+                  setQuickReplyModalOpen(true);
+                  setShowEmojiPicker(false);
+                }}
+                disabled={isTicketClosed}
+                className='flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500 text-white shadow transition hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-amber-300'
+                title='Respostas rápidas'
+              >
+                <Zap className='h-5 w-5' />
+              </button>
+              <button
+                type='button'
+                onClick={handleOpenScheduledModal}
+                disabled={isTicketClosed}
+                className='relative flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
+                title='Agendamentos'
+              >
+                <Clock3 size={18} />
+                {hasScheduledMessages && <span className='absolute right-1 top-1 h-2 w-2 rounded-full bg-primary' />}
+              </button>
+
+              {showEmojiPicker && (
+                <div
+                  ref={emojiPickerRef}
+                  className='absolute bottom-0 right-full mr-3 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl'
                 >
-                  {isGeneratingDraft ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles size={14} />}
-                  Gerar
-                </button>
-                <button
-                  type='button'
-                  onClick={() => {
-                    if (isTicketClosed) return;
-                    setQuickReplyModalOpen(true);
-                    setShowEmojiPicker(false);
-                  }}
-                  disabled={isTicketClosed}
-                  className='flex h-10 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white shadow transition hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-amber-300'
-                >
-                  <Zap className='h-4 w-4' />
-                  Respostas
-                </button>
-                <button
-                  type='submit'
-                  disabled={isTicketClosed || isSending || !newMessage.trim()}
-                  className='flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/40'
-                >
-                  {isSending ? (
-                    <Loader2 className='h-4 w-4 animate-spin' />
-                  ) : (
-                    <>
-                      <Send className='h-4 w-4' />
-                      Enviar
-                    </>
-                  )}
-                </button>
-              </div>
+                  <EmojiPicker data={data} onEmojiSelect={handleEmojiSelect} locale='pt' theme='light' />
+                </div>
+              )}
             </div>
           </div>
 
@@ -1995,6 +2067,15 @@ export default function ChatArea() {
           ticketId={selectedTicket.id}
           contactName={selectedTicket.contact.name}
           initialPreview={exportPreview}
+        />
+      )}
+
+      {selectedTicket && (
+        <ScheduledMessagesModal
+          open={scheduledModalOpen}
+          ticketId={selectedTicket.id}
+          contactName={selectedTicket.contact.name}
+          onClose={() => setScheduledModalOpen(false)}
         />
       )}
 

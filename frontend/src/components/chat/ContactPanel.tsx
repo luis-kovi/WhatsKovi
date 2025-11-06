@@ -6,8 +6,6 @@ import { StickyNote, Plus, X, Clock3, Tags, ChevronRight } from 'lucide-react';
 
 import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote, ContactTicketSummary } from '@/store/contactStore';
-import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
-import { useScheduledMessageStore } from '@/store/scheduledMessageStore';
 import { useMetadataStore } from '@/store/metadataStore';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -26,27 +24,6 @@ const PANEL_CARD_CLASS =
   'flex h-[150px] flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm';
 const PANEL_SCROLL_WRAPPER = 'mt-2 flex-1 overflow-hidden';
 const PANEL_SCROLL_AREA = 'h-full space-y-1.5 overflow-y-auto pr-1';
-
-const SCHEDULE_STATUS_LABELS: Record<string, string> = {
-  ACTIVE: 'Ativa',
-  PAUSED: 'Pausada',
-  COMPLETED: 'Concluida',
-  CANCELLED: 'Cancelada'
-};
-
-const SCHEDULE_STATUS_STYLES: Record<string, string> = {
-  ACTIVE: 'bg-emerald-100 text-emerald-600',
-  PAUSED: 'bg-amber-100 text-amber-600',
-  COMPLETED: 'bg-slate-200 text-slate-600',
-  CANCELLED: 'bg-rose-100 text-rose-600'
-};
-
-const RECURRENCE_LABELS: Record<string, string> = {
-  NONE: 'Unico envio',
-  DAILY: 'Diaria',
-  WEEKLY: 'Semanal',
-  MONTHLY: 'Mensal'
-};
 
 const CONNECTION_LABEL: Record<string, string> = {
   CONNECTED: 'Conectado',
@@ -371,40 +348,6 @@ const TicketHistoryModal = ({ open, tickets, onClose, onSelectTicket }: TicketHi
   );
 };
 
-type ScheduledMessagesModalProps = {
-  open: boolean;
-  ticketId: string;
-  contactName: string;
-  onClose: () => void;
-};
-
-const ScheduledMessagesModal = ({ open, ticketId, contactName, onClose }: ScheduledMessagesModalProps) => {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-10">
-      <div className="w-full max-w-4xl rounded-3xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Mensagens agendadas</h3>
-            <p className="text-sm text-gray-500">Gerencie os envios programados para {contactName}.</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
-          <ScheduledMessageSection ticketId={ticketId} contactName={contactName} />
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export default function ContactPanel() {
   const { selectedTicket, selectTicket } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
@@ -428,11 +371,6 @@ const {
     createNote: state.createNote
   }));
 
-  const { itemsByTicket: scheduledByTicket, fetchScheduledMessages } = useScheduledMessageStore((state) => ({
-    itemsByTicket: state.itemsByTicket,
-    fetchScheduledMessages: state.fetchScheduledMessages
-  }));
-
   const { dashboard, connections, loading: metadataLoading } = useMetadataStore((state) => ({
     dashboard: state.dashboard,
     connections: state.connections,
@@ -444,18 +382,16 @@ const {
   const [savingNote, setSavingNote] = useState(false);
   const [notesHistoryOpen, setNotesHistoryOpen] = useState(false);
   const [ticketHistoryOpen, setTicketHistoryOpen] = useState(false);
-  const [scheduledModalOpen, setScheduledModalOpen] = useState(false);
 
   useEffect(() => {
     if (selectedTicket) {
       const contactId = selectedTicket.contact.id;
       loadContact(contactId);
       fetchContactNotes(contactId).catch(() => undefined);
-      fetchScheduledMessages(selectedTicket.id).catch(() => undefined);
       return;
     }
     clearSelected();
-  }, [selectedTicket, loadContact, fetchContactNotes, clearSelected, fetchScheduledMessages]);
+  }, [selectedTicket, loadContact, fetchContactNotes, clearSelected]);
 
   const sortedNotes = useMemo(
     () =>
@@ -469,11 +405,6 @@ const {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [selectedContact]);
-
-  const scheduledMessages = useMemo(() => {
-    if (!selectedTicket) return [];
-    return scheduledByTicket[selectedTicket.id] ?? [];
-  }, [scheduledByTicket, selectedTicket]);
 
   const connectionInfo = useMemo(() => {
     if (metadataLoading) {
@@ -715,72 +646,6 @@ const {
               </div>
             </section>
 
-            <section className={PANEL_CARD_CLASS}>
-              <header className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-gray-800">Mensagens agendadas</span>
-                {scheduledMessages.length > 0 && (
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
-                    {scheduledMessages.length}
-                  </span>
-                )}
-              </header>
-              <div className={PANEL_SCROLL_WRAPPER}>
-                <div className={`${PANEL_SCROLL_AREA} text-[12px] text-gray-700`}>
-                  {scheduledMessages.length === 0 ? (
-                    <p className="text-[11px] text-gray-500">Nenhuma mensagem agendada.</p>
-                  ) : (
-                    scheduledMessages.map((schedule) => {
-                      const statusClass =
-                        SCHEDULE_STATUS_STYLES[schedule.status] ?? 'bg-gray-100 text-gray-600';
-                      const statusLabel = SCHEDULE_STATUS_LABELS[schedule.status] ?? schedule.status;
-                      const nextRun = schedule.nextRunAt ?? schedule.scheduledFor;
-                      const recurrenceLabel = RECURRENCE_LABELS[schedule.recurrence] ?? schedule.recurrence;
-                      return (
-                        <div
-                          key={schedule.id}
-                          className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-gray-700">
-                              {nextRun ? formatDateTime(nextRun) : '-'}
-                            </span>
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}
-                            >
-                              {statusLabel}
-                            </span>
-                          </div>
-                          <p className="mt-1.5 line-clamp-2 text-[13px] text-gray-700">{schedule.body}</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
-                            <span>{recurrenceLabel}</span>
-                            <span>{schedule.isPrivate ? 'Interna' : 'Visivel ao cliente'}</span>
-                            {schedule.user?.name && <span>por {schedule.user.name}</span>}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setScheduledModalOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-full border border-primary px-3 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/10"
-                >
-                  <Plus className="h-3 w-3" />
-                  Agendar mensagem
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScheduledModalOpen(true)}
-                  disabled={scheduledMessages.length === 0}
-                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Gerenciar agendadas
-                </button>
-              </div>
-            </section>
           </div>
         )}
       </aside>
@@ -808,14 +673,6 @@ const {
         onClose={() => setTicketHistoryOpen(false)}
         onSelectTicket={handleOpenTicketFromHistory}
       />
-      {selectedTicket && (
-        <ScheduledMessagesModal
-          open={scheduledModalOpen}
-          ticketId={selectedTicket.id}
-          contactName={contactName}
-          onClose={() => setScheduledModalOpen(false)}
-        />
-      )}
     </>
   );
 }
