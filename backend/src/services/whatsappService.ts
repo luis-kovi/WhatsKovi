@@ -20,14 +20,126 @@ interface WhatsAppClient {
 }
 
 const clients: Map<string, WhatsAppClient> = new Map();
+const reconnectionTimers: Map<string, NodeJS.Timeout> = new Map();
+const manualDisconnects: Set<string> = new Set();
+const manualDisconnectExpiry: Map<string, NodeJS.Timeout> = new Map();
 const AI_CHATBOT_MODE = (process.env.AI_CHATBOT_MODE || 'assist').toLowerCase();
 
 const uploadsDir = path.resolve(__dirname, '../../uploads');
+const localAuthRoot = path.resolve(process.cwd(), '.wwebjs_auth');
+const AUTO_RECONNECT_DELAY_MS = Number(process.env.WHATSAPP_RECONNECT_DELAY_MS ?? 15000);
+const LOGOUT_RECONNECT_DELAY_MS = Number(
+  process.env.WHATSAPP_RECONNECT_AFTER_LOGOUT_MS ?? 30000
+);
 
 const ensureUploadsDir = () => {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
+};
+
+const removeLocalAuthSession = (connectionId: string) => {
+  if (!fs.existsSync(localAuthRoot)) {
+    return;
+  }
+
+  const prefix = `session-${connectionId}`;
+  const entries = fs.readdirSync(localAuthRoot);
+
+  entries
+    .filter((entry) => entry.startsWith(prefix))
+    .forEach((entry) => {
+      const target = path.join(localAuthRoot, entry);
+      fs.rmSync(target, { recursive: true, force: true });
+    });
+};
+
+const cancelScheduledReconnect = (connectionId: string) => {
+  const timer = reconnectionTimers.get(connectionId);
+  if (timer) {
+    clearTimeout(timer);
+    reconnectionTimers.delete(connectionId);
+  }
+};
+
+const clearManualDisconnectFlag = (connectionId: string) => {
+  const timeout = manualDisconnectExpiry.get(connectionId);
+  if (timeout) {
+    clearTimeout(timeout);
+    manualDisconnectExpiry.delete(connectionId);
+  }
+  manualDisconnects.delete(connectionId);
+};
+
+const markManualDisconnect = (connectionId: string) => {
+  manualDisconnects.add(connectionId);
+  const timeout = manualDisconnectExpiry.get(connectionId);
+  if (timeout) {
+    clearTimeout(timeout);
+  }
+  const handle = setTimeout(() => {
+    manualDisconnects.delete(connectionId);
+    manualDisconnectExpiry.delete(connectionId);
+  }, 60000);
+  manualDisconnectExpiry.set(connectionId, handle);
+};
+
+const scheduleReconnect = (connectionId: string, reason: string) => {
+  if (manualDisconnects.has(connectionId) || reconnectionTimers.has(connectionId)) {
+    return;
+  }
+
+  const delay = reason === 'LOGOUT' ? LOGOUT_RECONNECT_DELAY_MS : AUTO_RECONNECT_DELAY_MS;
+
+  const timer = setTimeout(async () => {
+    reconnectionTimers.delete(connectionId);
+    try {
+      console.log(`[WhatsApp] Reconectando automaticamente (${connectionId}) apos ${reason}`);
+      await initializeWhatsApp(connectionId);
+    } catch (error) {
+      console.error(`[WhatsApp] Falha na reconexao automatica (${connectionId})`, error);
+      scheduleReconnect(connectionId, reason);
+    }
+  }, delay);
+
+  reconnectionTimers.set(connectionId, timer);
+};
+
+const destroyClient = async (connectionId: string) => {
+  const clientData = clients.get(connectionId);
+  if (!clientData) return;
+
+  try {
+    await clientData.client.destroy();
+  } catch (destroyError) {
+    console.warn(`[WhatsApp] Falha ao destruir cliente (${connectionId})`, destroyError);
+  } finally {
+    clients.delete(connectionId);
+  }
+};
+
+const isBrowserClosedError = (error: unknown) => {
+  if (!(error instanceof Error)) return false;
+  return /Target closed/i.test(error.message) || /Execution context was destroyed/i.test(error.message);
+};
+
+const handleBrowserCrash = async (connectionId: string, error: unknown, origin: string) => {
+  console.error(`[WhatsApp] Cliente encerrado inesperadamente (${connectionId}) durante ${origin}`);
+  await prisma.whatsAppConnection
+    .update({
+      where: { id: connectionId },
+      data: { status: 'DISCONNECTED' }
+    })
+    .catch(() => undefined);
+
+  const clientData = clients.get(connectionId);
+  if (clientData) {
+    clientData.status = 'DISCONNECTED';
+  }
+
+  await destroyClient(connectionId);
+  io.emit('whatsapp:disconnected', { connectionId, reason: 'CRASH' });
+  scheduleReconnect(connectionId, 'CRASH');
 };
 
 // Baixa uma URL para a pasta de uploads e retorna o caminho salvo
@@ -66,6 +178,18 @@ const ticketResponseInclude = {
 
 export const initializeWhatsApp = async (connectionId: string) => {
   try {
+    cancelScheduledReconnect(connectionId);
+    clearManualDisconnectFlag(connectionId);
+
+    const existingClient = clients.get(connectionId);
+    if (existingClient) {
+      if (existingClient.status !== 'DISCONNECTED') {
+        console.log(`[WhatsApp] Cliente ja inicializado (${connectionId})`);
+        return existingClient.client;
+      }
+      await destroyClient(connectionId);
+    }
+
     const connection = await prisma.whatsAppConnection.findUnique({
       where: { id: connectionId }
     });
@@ -73,6 +197,11 @@ export const initializeWhatsApp = async (connectionId: string) => {
     if (!connection) {
       throw new Error('Conexao nao encontrada');
     }
+
+    await prisma.whatsAppConnection.update({
+      where: { id: connectionId },
+      data: { status: 'CONNECTING', qrCode: null }
+    });
 
     const executablePath =
       process.env.CHROMIUM_PATH ||
@@ -95,6 +224,14 @@ export const initializeWhatsApp = async (connectionId: string) => {
       }
     });
 
+    const clientData: WhatsAppClient = {
+      id: connectionId,
+      client,
+      status: 'INITIALIZING'
+    };
+
+    clients.set(connectionId, clientData);
+
     client.on('qr', async (qr) => {
       const qrCodeData = await qrcode.toDataURL(qr);
 
@@ -108,6 +245,8 @@ export const initializeWhatsApp = async (connectionId: string) => {
 
     client.on('ready', async () => {
       const info = client.info;
+
+      clientData.status = 'CONNECTED';
 
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
@@ -123,29 +262,33 @@ export const initializeWhatsApp = async (connectionId: string) => {
 
     client.on('disconnected', async (reason) => {
       console.log(`WhatsApp desconectado (${connectionId}):`, reason);
-      
+
+      if (reason === 'LOGOUT') {
+        removeLocalAuthSession(connectionId);
+      }
+
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
-        data: { status: 'DISCONNECTED' }
+        data: { status: 'DISCONNECTED', qrCode: null }
       });
 
-      const clientData = clients.get(connectionId);
-      if (clientData) {
-        clientData.status = 'DISCONNECTED';
+      cancelScheduledReconnect(connectionId);
+
+      const data = clients.get(connectionId);
+      if (data) {
+        data.status = 'DISCONNECTED';
       }
-      
+
+      const shouldAutoReconnect = !manualDisconnects.has(connectionId);
+      if (!shouldAutoReconnect) {
+        clearManualDisconnectFlag(connectionId);
+      }
+
+      await destroyClient(connectionId);
       io.emit('whatsapp:disconnected', { connectionId, reason });
-      
-      // Tentar reconectar após 30 segundos se não foi desconexão manual
-      if (reason !== 'LOGOUT') {
-        setTimeout(async () => {
-          try {
-            console.log(`Tentando reconectar WhatsApp (${connectionId})...`);
-            await initializeWhatsApp(connectionId);
-          } catch (error) {
-            console.error(`Falha na reconexão automática (${connectionId}):`, error);
-          }
-        }, 30000);
+
+      if (shouldAutoReconnect) {
+        scheduleReconnect(connectionId, reason || 'DISCONNECTED');
       }
     });
 
@@ -155,16 +298,11 @@ export const initializeWhatsApp = async (connectionId: string) => {
 
     await client.initialize();
 
-    clients.set(connectionId, {
-      id: connectionId,
-      client,
-      status: 'INITIALIZING'
-    });
-
     return client;
   } catch (error) {
     console.error('Erro ao inicializar WhatsApp:', error);
     try {
+      clients.delete(connectionId);
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
         data: { status: 'ERROR', qrCode: null }
@@ -268,10 +406,18 @@ const handleIncomingMessage = async (connectionId: string, msg: any) => {
     let mediaUrl: string | undefined;
 
     if (msg.hasMedia) {
-      const media = await msg.downloadMedia();
-      if (media?.data) {
-        const stored = storeIncomingMedia(media.data, media.mimetype);
-        mediaUrl = stored.url;
+      try {
+        const media = await msg.downloadMedia();
+        if (media?.data) {
+          const stored = storeIncomingMedia(media.data, media.mimetype);
+          mediaUrl = stored.url;
+        }
+      } catch (mediaError) {
+        if (isBrowserClosedError(mediaError)) {
+          await handleBrowserCrash(connectionId, mediaError, 'downloadMedia');
+          throw mediaError;
+        }
+        console.error('Falha ao baixar midia do WhatsApp:', mediaError);
       }
     }
 
@@ -466,6 +612,9 @@ export const sendWhatsAppMessage = async (
     return waId;
   } catch (error) {
     console.error('Erro ao enviar mensagem:', error);
+    if (isBrowserClosedError(error)) {
+      await handleBrowserCrash(connectionId, error, 'sendMessage');
+    }
     throw error;
   }
 };
@@ -484,6 +633,9 @@ export const reactToWhatsAppMessage = async (
     return true;
   } catch (error) {
     console.error('Erro ao reagir a mensagem no WhatsApp:', error);
+    if (isBrowserClosedError(error)) {
+      await handleBrowserCrash(connectionId, error, 'reactToMessage');
+    }
     return false;
   }
 };
@@ -492,9 +644,19 @@ export const disconnectWhatsApp = async (connectionId: string) => {
   try {
     const clientData = clients.get(connectionId);
 
+    cancelScheduledReconnect(connectionId);
+
     if (clientData) {
-      await clientData.client.destroy();
-      clients.delete(connectionId);
+      markManualDisconnect(connectionId);
+      try {
+        await clientData.client.destroy();
+      } catch (destroyError) {
+        console.warn(`[WhatsApp] Falha ao encerrar cliente manualmente (${connectionId})`, destroyError);
+      } finally {
+        clients.delete(connectionId);
+      }
+    } else {
+      clearManualDisconnectFlag(connectionId);
     }
 
     await prisma.whatsAppConnection.update({
