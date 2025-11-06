@@ -709,7 +709,7 @@ const {
     );
   }
 
-  const ticket = selectedTicket as NonNullable<typeof selectedTicket>;
+  const ticket = selectedTicket;
   const contactName = ticket.contact.name;
   const contactPhone = ticket.contact.phoneNumber;
   const ticketReference = ticket.id.slice(0, 8).toUpperCase();
