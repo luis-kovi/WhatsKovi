@@ -2089,3 +2089,4 @@ export default function ChatArea() {
     </div>
 );
 }
+
