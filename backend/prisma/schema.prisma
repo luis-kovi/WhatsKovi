@@ -26,6 +26,12 @@ enum TicketStatus {
   CLOSED
 }
 
+enum TicketType {
+  WHATSAPP
+  SMS
+  EMAIL
+}
+
 enum Priority {
   LOW
   MEDIUM
@@ -294,6 +300,7 @@ model QueueUser {
 model Ticket {
   id                String       @id @default(uuid())
   status            TicketStatus @default(PENDING)
+  type              TicketType   @default(WHATSAPP)
   priority          Priority     @default(MEDIUM)
   carPlate          String?
   unreadMessages    Int          @default(0)

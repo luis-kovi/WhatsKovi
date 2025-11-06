@@ -276,8 +276,11 @@ export const transferTicket = async (req: AuthRequest, res: Response) => {
 };
 
 const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+const VALID_TICKET_TYPES = ['WHATSAPP', 'SMS', 'EMAIL'] as const;
 
 const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '');
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 const isValidFullName = (value: string) => {
   const parts = value
@@ -304,13 +307,15 @@ const isValidCarPlate = (value: string) => /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(v
 
 export const createManualTicket = async (req: AuthRequest, res: Response) => {
   try {
-    const { phoneNumber, name, queueId, priority, tagIds, carPlate } = req.body as {
+    const { phoneNumber, name, queueId, priority, tagIds, carPlate, type, email } = req.body as {
       phoneNumber?: string;
       name?: string;
       queueId?: string | null;
       priority?: string;
       tagIds?: string[];
       carPlate?: string;
+      type?: string;
+      email?: string;
     };
 
     const normalizedPhone = normalizePhoneNumber(phoneNumber || '');
@@ -332,6 +337,19 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Prioridade invalida' });
     }
 
+    const requestedType =
+      typeof type === 'string' && type.trim().length > 0 ? type.trim().toUpperCase() : 'WHATSAPP';
+    if (!VALID_TICKET_TYPES.includes(requestedType as (typeof VALID_TICKET_TYPES)[number])) {
+      return res.status(400).json({ error: 'Tipo de ticket invalido' });
+    }
+    const ticketType = requestedType as (typeof VALID_TICKET_TYPES)[number];
+
+    const sanitizedEmail =
+      typeof email === 'string' && email.trim().length > 0 ? normalizeEmail(email) : undefined;
+    if (sanitizedEmail && !isValidEmail(sanitizedEmail)) {
+      return res.status(400).json({ error: 'Email invalido' });
+    }
+
     let contact = await prisma.contact.findUnique({
       where: { phoneNumber: normalizedPhone }
     });
@@ -341,12 +359,28 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ error: 'Nome completo invalido' });
       }
 
+      if (ticketType === 'EMAIL' && !sanitizedEmail) {
+        return res.status(400).json({ error: 'Informe um email valido para tickets de e-mail.' });
+      }
+
       contact = await prisma.contact.create({
         data: {
           name: formatFullName(name),
-          phoneNumber: normalizedPhone
+          phoneNumber: normalizedPhone,
+          ...(sanitizedEmail ? { email: sanitizedEmail } : {})
         }
       });
+    } else {
+      if (sanitizedEmail && sanitizedEmail !== (contact.email ?? undefined)) {
+        contact = await prisma.contact.update({
+          where: { id: contact.id },
+          data: { email: sanitizedEmail }
+        });
+      } else if (ticketType === 'EMAIL' && !contact.email) {
+        return res.status(400).json({
+          error: 'Contato sem email cadastrado. Informe um email para tickets de e-mail.'
+        });
+      }
     }
 
     if (queueId) {
@@ -384,6 +418,7 @@ export const createManualTicket = async (req: AuthRequest, res: Response) => {
     data: {
       contactId: contact.id,
       whatsappId: connection.id,
+      type: ticketType,
       status: 'OPEN',
       priority: (priority && VALID_PRIORITIES.includes(priority) ? priority : 'MEDIUM') as any,
       queueId: queueId || undefined,

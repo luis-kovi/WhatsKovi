@@ -38,7 +38,6 @@ import { MessageItem } from '@/components/chat/MessageItem';
 import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
-import { fetchMultichannelCapabilities, MultichannelCapabilities } from '@/services/multichannel';
 import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
 import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
 
@@ -77,13 +76,6 @@ const TICKET_STATUS_STYLES: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-600',
   OPEN: 'bg-sky-100 text-sky-600',
   CLOSED: 'bg-slate-200 text-slate-600'
-};
-
-type ChannelOption = {
-  value: MessageChannel;
-  label: string;
-  disabled: boolean;
-  reason?: string;
 };
 
 type MessageEditModalProps = {
@@ -358,14 +350,12 @@ export default function ChatArea() {
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [messageChannel, setMessageChannel] = useState<MessageChannel>('WHATSAPP');
   const [isQuickReplyModalOpen, setQuickReplyModalOpen] = useState(false);
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [multichannelCapabilities, setMultichannelCapabilities] = useState<MultichannelCapabilities | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -453,67 +443,15 @@ export default function ChatArea() {
     selectedContact?.email ?? selectedTicket?.contact.email ?? ''
   ).trim();
 
-  const channelOptions = useMemo<ChannelOption[]>(() => {
+  const activeChannel = useMemo<MessageChannel>(() => {
     if (isPrivate) {
-      return [];
+      return 'WHATSAPP';
     }
-
-    const options: ChannelOption[] = [{ value: 'WHATSAPP', label: 'WhatsApp', disabled: false }];
-
-    if (!multichannelCapabilities) {
-      return options;
-    }
-
-    const emailStatus = multichannelCapabilities.email;
-    let emailReason: string | undefined;
-    if (!emailStatus.enabled) {
-      emailReason = 'Canal de e-mail desativado nas configuracoes.';
-    } else if (!emailStatus.configured) {
-      emailReason = 'Configure o SMTP em Configuracoes > Integracoes.';
-    } else if (!contactEmail) {
-      emailReason = 'Contato sem e-mail cadastrado.';
-    }
-
-    options.push({
-      value: 'EMAIL',
-      label: 'E-mail',
-      disabled: Boolean(emailReason),
-      reason: emailReason
-    });
-
-    const smsStatus = multichannelCapabilities.sms;
-    let smsReason: string | undefined;
-    if (!smsStatus.enabled) {
-      smsReason = 'Canal de SMS desativado nas configuracoes.';
-    } else if (!smsStatus.configured) {
-      smsReason = 'Configure o provedor de SMS em Configuracoes > Integracoes.';
-    }
-
-    options.push({
-      value: 'SMS',
-      label: 'SMS',
-      disabled: Boolean(smsReason),
-      reason: smsReason
-    });
-
-    return options;
-  }, [contactEmail, isPrivate, multichannelCapabilities]);
+    const channel = selectedTicket?.type ?? 'WHATSAPP';
+    return channel as MessageChannel;
+  }, [isPrivate, selectedTicket?.type]);
 
   const isTicketClosed = selectedTicket?.status === 'CLOSED';
-
-  useEffect(() => {
-    if (isPrivate) {
-      setMessageChannel('WHATSAPP');
-    }
-  }, [isPrivate]);
-
-  useEffect(() => {
-    if (isPrivate) return;
-    const currentOption = channelOptions.find((option) => option.value === messageChannel);
-    if (!currentOption || currentOption.disabled) {
-      setMessageChannel('WHATSAPP');
-    }
-  }, [channelOptions, isPrivate, messageChannel]);
   const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -530,22 +468,6 @@ export default function ChatArea() {
     }
     return null;
   }, [visibleMessages, selectedTicket]);
-
-  const handleSelectChannelOption = useCallback(
-    (channel: MessageChannel) => {
-      if (isPrivate) return;
-      const option = channelOptions.find((item) => item.value === channel);
-      if (!option) return;
-      if (option.disabled) {
-        if (option.reason) {
-          toast.error(option.reason);
-        }
-        return;
-      }
-      setMessageChannel(channel);
-    },
-    [channelOptions, isPrivate]
-  );
 
   const aiSuggestions = useMemo(
     () =>
@@ -618,25 +540,6 @@ export default function ChatArea() {
       scope: 'available'
     });
   }, [selectedTicket, loadQuickReplies]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    fetchMultichannelCapabilities()
-      .then((data) => {
-        if (mounted) {
-          setMultichannelCapabilities(data);
-        }
-      })
-      .catch((error) => {
-        console.error('Erro ao carregar configuracoes de multicanal:', error);
-        toast.error('Nao foi possivel carregar os canais adicionais.');
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (visibleMessages.length === 0) return;
@@ -842,7 +745,7 @@ export default function ChatArea() {
       toast.error('Atendimento encerrado.');
       return;
     }
-    if (!isPrivate && messageChannel !== 'WHATSAPP') {
+    if (!isPrivate && activeChannel !== 'WHATSAPP') {
       toast.error('Gravacao disponivel apenas para WhatsApp.');
       return;
     }
@@ -912,7 +815,7 @@ export default function ChatArea() {
             isPrivate,
             quotedMsgId: quotedMessage?.id ?? null,
             type: 'AUDIO',
-            channel: 'WHATSAPP',
+            channel: activeChannel,
             onUploadProgress: (progress) => setUploadProgress(progress)
           });
           toast.success(isPrivate ? 'Nota interna por audio criada' : 'Audio enviado');
@@ -949,7 +852,7 @@ export default function ChatArea() {
         body: trimmed,
         isPrivate,
         quotedMsgId: quotedMessage?.id ?? null,
-        channel: !isPrivate ? messageChannel : undefined
+        channel: !isPrivate ? activeChannel : undefined
       });
       setNewMessage('');
       setShowEmojiPicker(false);
@@ -965,7 +868,7 @@ export default function ChatArea() {
     } finally {
       setIsSending(false);
     }
-  }, [selectedTicket, isSending, newMessage, sendMessageAction, isPrivate, quotedMessage, messageChannel]);
+  }, [selectedTicket, isSending, newMessage, sendMessageAction, isPrivate, quotedMessage, activeChannel]);
 
   const handleSendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -977,7 +880,7 @@ export default function ChatArea() {
   const handleFileButtonClick = () => {
     if (isTicketClosed) return;
     if (!selectedTicket) return;
-    if (!isPrivate && messageChannel !== 'WHATSAPP') {
+    if (!isPrivate && activeChannel !== 'WHATSAPP') {
       toast.error('Envio de arquivos disponivel apenas para WhatsApp.');
       return;
     }
@@ -1020,7 +923,7 @@ export default function ChatArea() {
     if (!selectedTicket) return;
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!isPrivate && messageChannel !== 'WHATSAPP') {
+    if (!isPrivate && activeChannel !== 'WHATSAPP') {
       toast.error('Envio de arquivos disponivel apenas para WhatsApp.');
       return;
     }
@@ -1079,7 +982,9 @@ export default function ChatArea() {
         queueId: selectedTicket.queue?.id ?? undefined,
         priority: selectedTicket.priority,
         tagIds: tagIds.length > 0 ? tagIds : undefined,
-        carPlate: selectedTicket.carPlate ?? undefined
+        carPlate: selectedTicket.carPlate ?? undefined,
+        type: selectedTicket.type,
+        email: selectedTicket.contact.email ?? undefined
       });
       toast.success('Novo ticket criado para este contato.');
     } catch (error) {
@@ -1703,27 +1608,6 @@ export default function ChatArea() {
             </span>
           ))}
         </div>
-        {!isPrivate && channelOptions.length > 1 && (
-          <div className='mb-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-gray-500'>
-            <span className='uppercase tracking-wide'>Enviar via</span>
-            {channelOptions.map((option) => (
-              <button
-                key={option.value}
-                type='button'
-                aria-disabled={option.disabled}
-                onClick={() => handleSelectChannelOption(option.value)}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
-                  messageChannel === option.value
-                    ? 'border-primary bg-primary text-white shadow-sm'
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-100'
-                } ${option.disabled ? 'cursor-not-allowed opacity-60 hover:bg-transparent' : ''}`}
-                title={option.disabled && option.reason ? option.reason : undefined}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
         {quotedMessage && (
           <div className='mb-3 flex items-start justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-primary'>
             <div className='pr-4'>

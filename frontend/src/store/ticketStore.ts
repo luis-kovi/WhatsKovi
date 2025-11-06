@@ -67,6 +67,7 @@ export interface TicketTag {
 export interface Ticket {
   id: string;
   status: string;
+  type: 'WHATSAPP' | 'SMS' | 'EMAIL';
   priority: string;
   carPlate?: string | null;
   unreadMessages: number;
@@ -150,6 +151,8 @@ interface TicketState {
     priority?: string;
     tagIds?: string[];
     carPlate?: string | null;
+    email?: string | null;
+    type?: 'WHATSAPP' | 'SMS' | 'EMAIL';
   }) => Promise<string | null>;
   loadMessages: (ticketId: string, options?: { force?: boolean }) => Promise<void>;
   sendMessage: (payload: SendMessagePayload) => Promise<TicketMessage | null>;
@@ -210,6 +213,7 @@ type MessageSocketPayload = RawMessage & { ticketId: string };
 type RawTicket = {
   id: string;
   status: string;
+  type: 'WHATSAPP' | 'SMS' | 'EMAIL';
   priority: string;
   carPlate?: string | null;
   unreadMessages: number;
@@ -218,6 +222,7 @@ type RawTicket = {
     id: string;
     name: string;
     phoneNumber: string;
+    email?: string | null;
     avatar?: string | null;
   };
   user?: ReactionUser | null;
@@ -472,6 +477,7 @@ const normalizeTicket = (ticket: RawTicket): Ticket => {
   return {
     id: ticket.id,
     status: ticket.status,
+    type: ticket.type,
     priority: ticket.priority,
     carPlate: ticket.carPlate ?? null,
     unreadMessages: ticket.unreadMessages,
@@ -740,7 +746,9 @@ export const useTicketStore = create<TicketState>((set, get) => ({
       const requestBody = {
         ...payload,
         phoneNumber: phoneDigits,
-        carPlate: payload.carPlate ? normalizeCarPlate(payload.carPlate) : undefined
+        carPlate: payload.carPlate ? normalizeCarPlate(payload.carPlate) : undefined,
+        type: payload.type ?? 'WHATSAPP',
+        email: payload.email ? payload.email.trim().toLowerCase() : undefined
       };
 
       const response = await api.post<Ticket>('/tickets', requestBody);

@@ -263,6 +263,8 @@ export default function TicketList() {
   const [manualQueueId, setManualQueueId] = useState<string>('');
   const [manualPriority, setManualPriority] = useState('MEDIUM');
   const [manualTagIds, setManualTagIds] = useState<string[]>([]);
+  const [manualTicketType, setManualTicketType] = useState<'WHATSAPP' | 'SMS' | 'EMAIL'>('WHATSAPP');
+  const [manualEmail, setManualEmail] = useState('');
   const [manualCarPlate, setManualCarPlate] = useState('');
   const [matchedContactName, setMatchedContactName] = useState<string | null>(null);
   const [manualLoading, setManualLoading] = useState(false);
@@ -424,6 +426,8 @@ export default function TicketList() {
     setManualName('');
     setManualQueueId('');
     setManualPriority('MEDIUM');
+    setManualTicketType('WHATSAPP');
+    setManualEmail('');
     setManualTagIds([]);
     setManualCarPlate('');
     setMatchedContactName(null);
@@ -498,6 +502,22 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       }
     }
 
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const trimmedEmail = manualEmail.trim();
+    if (manualTicketType === 'EMAIL') {
+      if (!trimmedEmail) {
+        setManualError('Informe um email para tickets de e-mail.');
+        return;
+      }
+      if (!emailPattern.test(trimmedEmail)) {
+        setManualError('Informe um email valido.');
+        return;
+      }
+    } else if (trimmedEmail && !emailPattern.test(trimmedEmail)) {
+      setManualError('Informe um email valido.');
+      return;
+    }
+
     const normalizedPlate = normalizeCarPlate(manualCarPlate);
     if (!isValidCarPlate(normalizedPlate)) {
       setManualError('Placa invalida. Use o formato ABC1D23.');
@@ -512,7 +532,9 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         queueId: manualQueueId || undefined,
         priority: manualPriority,
         tagIds: manualTagIds,
-        carPlate: normalizedPlate
+        carPlate: normalizedPlate,
+        type: manualTicketType,
+        email: trimmedEmail || undefined
       });
 
       await fetchTickets();
@@ -863,6 +885,31 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <div>
+                <span className="text-xs font-semibold uppercase text-gray-500">Canal</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(['WHATSAPP', 'EMAIL', 'SMS'] as const).map((option) => {
+                    const isActive = manualTicketType === option;
+                    const label =
+                      option === 'WHATSAPP' ? 'WhatsApp' : option === 'EMAIL' ? 'E-mail' : 'SMS';
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setManualTicketType(option)}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                          isActive
+                            ? 'border-primary bg-primary text-white shadow-sm'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
                 <label className="text-xs font-semibold uppercase text-gray-500">Telefone</label>
                 <input
                   type="tel"
@@ -876,6 +923,10 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                 {matchedContactName ? (
                   <p className="mt-1 text-xs text-gray-500">
                     Contato encontrado: <span className="font-semibold text-gray-700">{matchedContactName}</span>
+                  </p>
+                ) : manualTicketType === 'EMAIL' ? (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Utilize o telefone para localizar o contato. O envio sera realizado por e-mail.
                   </p>
                 ) : (
                   <p className="mt-1 text-xs text-gray-400">Informe o telefone com DDD.</p>
@@ -895,6 +946,23 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
                   />
                 </div>
               )}
+
+              <div>
+                <label className="text-xs font-semibold uppercase text-gray-500">
+                  E-mail{' '}
+                  <span className="text-[10px] font-medium text-gray-400">
+                    {manualTicketType === 'EMAIL' ? 'Obrigatorio' : 'Opcional'}
+                  </span>
+                </label>
+                <input
+                  type="email"
+                  value={manualEmail}
+                  onChange={(event) => setManualEmail(event.target.value)}
+                  placeholder="contato@email.com"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  required={manualTicketType === 'EMAIL'}
+                />
+              </div>
 
               <div>
                 <label className="text-xs font-semibold uppercase text-gray-500">Placa do carro</label>
@@ -993,10 +1061,6 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-
-
-
 
 
 
