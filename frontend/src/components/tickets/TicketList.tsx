@@ -597,8 +597,8 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
           </div>
 
           <form onSubmit={handleSearchSubmit} className="mb-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative min-w-[200px] flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="relative flex-1 min-w-[140px]">
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
@@ -1064,7 +1064,6 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
 
 
 
