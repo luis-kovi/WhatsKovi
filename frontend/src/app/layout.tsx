@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/providers/ThemeProvider'
 import { I18nProvider } from '@/providers/I18nProvider'
 import { ThemeToaster } from '@/components/common/ThemeToaster'
 import { AnalyticsLoader } from '@/components/analytics/AnalyticsLoader'
+import { ResponsiveScaler } from '@/components/layout/ResponsiveScaler'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -80,8 +81,10 @@ export default function RootLayout({
         <AnalyticsLoader />
         <I18nProvider>
           <ThemeProvider>
-            {children}
-            <ThemeToaster />
+            <ResponsiveScaler>
+              {children}
+              <ThemeToaster />
+            </ResponsiveScaler>
           </ThemeProvider>
         </I18nProvider>
       </body>

@@ -9,13 +9,11 @@ import ContactPanel from '@/components/chat/ContactPanel';
 import { useAuthStore } from '@/store/authStore';
 import { useTicketStore } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
-import { useDashboardResponsiveScale } from '@/hooks/useDashboardResponsiveScale';
 
 export default function DashboardPage() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const loadUser = useAuthStore((state) => state.loadUser);
-  useDashboardResponsiveScale();
 
   const fetchTickets = useTicketStore((state) => state.fetchTickets);
   const setupTicketSocket = useTicketStore((state) => state.setupSocketListeners);
