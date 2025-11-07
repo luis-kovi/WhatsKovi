@@ -22,7 +22,9 @@ import {
   Lock,
   Unlock,
   Clock3,
-  Flag
+  Flag,
+  Car,
+  Pencil
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
@@ -36,6 +38,7 @@ import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
 import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
+import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
 import {
   TICKET_PRIORITY_OPTIONS,
   TICKET_PRIORITY_LABELS,
@@ -324,6 +327,10 @@ export default function ChatArea() {
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [processingBlockToggle, setProcessingBlockToggle] = useState(false);
+  const [isCarPlateEditorOpen, setCarPlateEditorOpen] = useState(false);
+  const [carPlateInput, setCarPlateInput] = useState('');
+  const [carPlateError, setCarPlateError] = useState<string | null>(null);
+  const [carPlateSaving, setCarPlateSaving] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
 
@@ -343,6 +350,7 @@ export default function ChatArea() {
     () => selectedTicket?.tags.map((relation) => relation.tag.id) ?? [],
     [selectedTicket?.tags]
   );
+  const carPlateDisplay = selectedTicket?.carPlate ? selectedTicket.carPlate : 'Nao cadastrada';
 
   const activeChannel = useMemo<MessageChannel>(() => {
     if (isPrivate) {
@@ -356,13 +364,24 @@ export default function ChatArea() {
   const disableTicketAdjustments = contactBlocked || isTicketClosed;
   const currentPriority = selectedTicket?.priority ?? 'LOW';
   const priorityLabel = TICKET_PRIORITY_LABELS[currentPriority] ?? currentPriority;
-  const priorityIndicatorClass = TICKET_PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
+  const priorityButtonColorClass =
+    {
+      LOW: 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100',
+      MEDIUM: 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100',
+      HIGH: 'border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100',
+      URGENT: 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100'
+    }[currentPriority] ?? 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200';
   const conversationLocked = isTicketClosed || contactBlocked;
   const conversationLockedMessage = contactBlocked ? 'Contato bloqueado.' : 'Atendimento encerrado.';
+useEffect(() => {
+  setBlockModalOpen(false);
+  setProcessingBlockToggle(false);
+}, [selectedContact?.id]);
   useEffect(() => {
-    setBlockModalOpen(false);
-    setProcessingBlockToggle(false);
-  }, [selectedContact?.id]);
+    setCarPlateEditorOpen(false);
+    setCarPlateInput('');
+    setCarPlateError(null);
+  }, [selectedTicket?.id]);
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
@@ -1085,6 +1104,55 @@ export default function ChatArea() {
     }
   };
 
+  const openCarPlateEditor = () => {
+    if (!selectedTicket) return;
+    const initialValue = selectedTicket.carPlate ? normalizeCarPlate(selectedTicket.carPlate) : '';
+    setCarPlateInput(initialValue);
+    setCarPlateError(null);
+    setCarPlateEditorOpen(true);
+  };
+
+  const closeCarPlateEditor = () => {
+    setCarPlateInput('');
+    setCarPlateError(null);
+    setCarPlateEditorOpen(false);
+  };
+
+  const handleCarPlateChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setCarPlateError(null);
+    setCarPlateInput(event.target.value.toUpperCase());
+  };
+
+  const handleCarPlateSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedTicket) return;
+
+    const normalized = normalizeCarPlate(carPlateInput);
+    if (normalized.length > 0 && !isValidCarPlate(normalized)) {
+      setCarPlateError('Placa invalida. Use o formato ABC1D23.');
+      return;
+    }
+
+    const existing = selectedTicket.carPlate ?? '';
+    if (normalized === existing) {
+      closeCarPlateEditor();
+      return;
+    }
+
+    setCarPlateSaving(true);
+    try {
+      await updateTicketDetails(selectedTicket.id, { carPlate: normalized || null });
+      toast.success(normalized ? 'Placa do carro atualizada.' : 'Placa do carro removida.');
+      closeCarPlateEditor();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nao foi possivel atualizar a placa do carro.';
+      setCarPlateError(message);
+      toast.error(message);
+    } finally {
+      setCarPlateSaving(false);
+    }
+  };
+
   const handleExportConversation = () => {
     if (!selectedTicket) return;
     setExportModalOpen(true);
@@ -1183,6 +1251,20 @@ export default function ChatArea() {
                   Contato bloqueado
                 </div>
               )}
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-600">
+                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-mono uppercase tracking-widest text-gray-800 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100">
+                  <Car size={12} />
+                  {carPlateDisplay}
+                </span>
+                <button
+                  type="button"
+                  onClick={openCarPlateEditor}
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <Pencil size={12} />
+                  Editar
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1197,16 +1279,15 @@ export default function ChatArea() {
                   setShowPriorityMenu((prev) => !prev);
                   setIsTagMenuOpen(false);
                 }}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  disableTicketAdjustments ? 'bg-gray-200 text-gray-500' : 'bg-primary text-white hover:bg-primary/90'
+                className={`flex h-9 w-9 items-center justify-center rounded-lg border text-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  disableTicketAdjustments
+                    ? 'border-gray-200 bg-gray-100 text-gray-400'
+                    : priorityButtonColorClass
                 }`}
+                aria-label={`Prioridade: ${priorityLabel}`}
+                title={`Prioridade: ${priorityLabel}`}
               >
                 <Flag size={14} />
-                <div className="flex items-center gap-1">
-                  <span>Prioridade</span>
-                  <span className={`h-2 w-2 rounded-full ${priorityIndicatorClass}`} />
-                  <span className="hidden text-[11px] font-normal sm:inline">{priorityLabel}</span>
-                </div>
               </button>
               {showPriorityMenu && (
                 <div
@@ -1242,14 +1323,13 @@ export default function ChatArea() {
                   setIsTagMenuOpen((prev) => !prev);
                   setShowPriorityMenu(false);
                 }}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  disableTicketAdjustments ? 'bg-gray-200 text-gray-500' : 'bg-accent text-white hover:bg-accent/80'
-                }`}
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Tags do ticket"
+                title="Tags do ticket"
               >
                 <TagIcon size={14} />
-                <span>Tags</span>
                 {activeTagIds.length > 0 && (
-                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
                     {activeTagIds.length}
                   </span>
                 )}
@@ -1651,6 +1731,66 @@ export default function ChatArea() {
 
         <input ref={fileInputRef} type='file' className='hidden' onChange={handleFileUpload} />
       </div>
+
+      {isCarPlateEditorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Car size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Placa do veiculo</p>
+                  <p className="text-xs text-gray-500">Associe ou atualize a placa vinculada ao ticket.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeCarPlateEditor}
+                className="rounded-lg p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                aria-label="Fechar editor de placa"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleCarPlateSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Placa do carro</label>
+                <input
+                  type="text"
+                  value={carPlateInput}
+                  onChange={handleCarPlateChange}
+                  placeholder="ABC1D23"
+                  maxLength={7}
+                  autoFocus
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase tracking-widest focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="mt-1 text-[11px] text-gray-500">Use o padrao Mercosul (ABC1D23). Deixe vazio para remover.</p>
+              </div>
+              {carPlateError && <p className="text-sm text-rose-500">{carPlateError}</p>}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeCarPlateEditor}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
+                  disabled={carPlateSaving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={carPlateSaving}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60"
+                >
+                  {carPlateSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Car size={14} />}
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {blockModalOpen && selectedContact && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-10">

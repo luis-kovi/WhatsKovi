@@ -1,24 +1,20 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   StickyNote,
-  Plus,
   X,
   Clock3,
   Tags,
   ChevronRight,
   Layers,
-  Car,
-  Loader2,
-  Pencil
+  Loader2
 } from 'lucide-react';
 
 import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote, ContactTicketSummary } from '@/store/contactStore';
 import { useMetadataStore } from '@/store/metadataStore';
-import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
 import { TICKET_PRIORITY_LABELS, TICKET_PRIORITY_COLORS } from '@/constants/ticketPriority';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -400,10 +396,6 @@ export default function ContactPanel() {
   }));
 
   const [showQueueMenu, setShowQueueMenu] = useState(false);
-  const [isCarPlateEditorOpen, setCarPlateEditorOpen] = useState(false);
-  const [carPlateInput, setCarPlateInput] = useState('');
-  const [carPlateError, setCarPlateError] = useState<string | null>(null);
-  const [carPlateSaving, setCarPlateSaving] = useState(false);
 
   const queueButtonRef = useRef<HTMLButtonElement | null>(null);
   const queueMenuRef = useRef<HTMLDivElement | null>(null);
@@ -431,9 +423,6 @@ export default function ContactPanel() {
 
   useEffect(() => {
     setShowQueueMenu(false);
-    setCarPlateEditorOpen(false);
-    setCarPlateInput('');
-    setCarPlateError(null);
   }, [selectedTicket?.id]);
 
   useEffect(() => {
@@ -503,55 +492,6 @@ export default function ContactPanel() {
     }
   };
 
-  const openCarPlateEditor = () => {
-    if (!selectedTicket) return;
-    const initialValue = selectedTicket.carPlate ? normalizeCarPlate(selectedTicket.carPlate) : '';
-    setCarPlateInput(initialValue);
-    setCarPlateError(null);
-    setCarPlateEditorOpen(true);
-  };
-
-  const closeCarPlateEditor = () => {
-    setCarPlateInput('');
-    setCarPlateError(null);
-    setCarPlateEditorOpen(false);
-  };
-
-  const handleCarPlateChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setCarPlateError(null);
-    setCarPlateInput(event.target.value.toUpperCase());
-  };
-
-  const handleCarPlateSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedTicket) return;
-
-    const normalized = normalizeCarPlate(carPlateInput);
-    if (normalized.length > 0 && !isValidCarPlate(normalized)) {
-      setCarPlateError('Placa invalida. Use o formato ABC1D23.');
-      return;
-    }
-
-    const existing = selectedTicket.carPlate ?? '';
-    if (normalized === existing) {
-      closeCarPlateEditor();
-      return;
-    }
-
-    setCarPlateSaving(true);
-    try {
-      await updateTicketDetails(selectedTicket.id, { carPlate: normalized || null });
-      toast.success(normalized ? 'Placa do carro atualizada.' : 'Placa do carro removida.');
-      closeCarPlateEditor();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Nao foi possivel atualizar a placa do carro.';
-      setCarPlateError(message);
-      toast.error(message);
-    } finally {
-      setCarPlateSaving(false);
-    }
-  };
-
   if (!selectedTicket) {
     return (
       <aside className="hidden w-80 flex-col border-l border-gray-200 bg-white p-4 xl:flex">
@@ -574,7 +514,6 @@ export default function ContactPanel() {
   const contactName = ticket.contact.name;
   const contactPhone = ticket.contact.phoneNumber;
   const ticketReference = ticket.id.slice(0, 8).toUpperCase();
-  const carPlateDisplay = ticket.carPlate ? ticket.carPlate : 'Nao cadastrada';
   const isTicketClosed = ticket.status === 'CLOSED';
   const requiresAcceptance = ticket.status === 'PENDING' || ticket.status === 'BOT';
   const disableTicketAdjustments = contactBlocked || isTicketClosed;
@@ -688,22 +627,6 @@ export default function ContactPanel() {
                   ) : (
                     <p className="mt-1 text-xs font-semibold text-gray-500">Sem fila</p>
                   )}
-                </div>
-                <div className="col-span-2 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Placa do carro</p>
-                      <p className="mt-1 font-mono text-sm uppercase tracking-wider text-gray-800">{carPlateDisplay}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={openCarPlateEditor}
-                      className="rounded-md border border-primary/40 p-1.5 text-primary transition hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      aria-label={ticket.carPlate ? 'Editar placa do carro' : 'Adicionar placa do carro'}
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -836,8 +759,7 @@ export default function ContactPanel() {
                     onClick={() => setCreateModalOpen(true)}
                     className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-primary/90"
                   >
-                    <Plus className="h-3 w-3" />
-                    Nova nota
+                    + nota
                   </button>
                 </div>
               </header>
@@ -883,67 +805,6 @@ export default function ContactPanel() {
           </div>
         )}
       </aside>
-
-      {isCarPlateEditorOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Car size={18} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Placa do veiculo</p>
-                  <p className="text-xs text-gray-500">Associe ou atualize a placa vinculada ao ticket.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeCarPlateEditor}
-                className="rounded-lg p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                aria-label="Fechar editor de placa"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={handleCarPlateSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Placa do carro</label>
-                <input
-                  type="text"
-                  value={carPlateInput}
-                  onChange={handleCarPlateChange}
-                  placeholder="ABC1D23"
-                  maxLength={7}
-                  autoFocus
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase tracking-widest focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <p className="mt-1 text-[11px] text-gray-500">Use o padrao Mercosul (ABC1D23). Deixe vazio para remover.</p>
-              </div>
-              {carPlateError && <p className="text-sm text-rose-500">{carPlateError}</p>}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={closeCarPlateEditor}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
-                  disabled={carPlateSaving}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={carPlateSaving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/60"
-                >
-                  {carPlateSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Car size={14} />}
-                  Salvar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       <NoteDetailModal note={noteDetail} contactName={contactName} contactPhone={contactPhone} onClose={() => setNoteDetail(null)} />
       <NoteCreateModal
         open={createModalOpen}
