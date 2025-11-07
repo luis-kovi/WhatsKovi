@@ -414,27 +414,28 @@ export default function ContactPanel() {
   const [notesHistoryOpen, setNotesHistoryOpen] = useState(false);
   const [ticketHistoryOpen, setTicketHistoryOpen] = useState(false);
   const [ticketActionLoading, setTicketActionLoading] = useState(false);
+  const [isCompactHeight, setIsCompactHeight] = useState(false);
 
-  useEffect(() => {
-    if (selectedTicket) {
-      const contactId = selectedTicket.contact.id;
-      loadContact(contactId);
-      fetchContactNotes(contactId).catch(() => undefined);
-      return;
-    }
-    clearSelected();
-  }, [selectedTicket, loadContact, fetchContactNotes, clearSelected]);
+useEffect(() => {
+  if (selectedTicket) {
+    const contactId = selectedTicket.contact.id;
+    loadContact(contactId);
+    fetchContactNotes(contactId).catch(() => undefined);
+    return;
+  }
+  clearSelected();
+}, [selectedTicket, loadContact, fetchContactNotes, clearSelected]);
 
-  useEffect(() => {
-    fetchQueues();
-  }, [fetchQueues]);
+useEffect(() => {
+  fetchQueues();
+}, [fetchQueues]);
 
-  useEffect(() => {
-    setShowQueueMenu(false);
-    setCarPlateEditorOpen(false);
-    setCarPlateInput('');
-    setCarPlateError(null);
-  }, [selectedTicket?.id]);
+useEffect(() => {
+  setShowQueueMenu(false);
+  setCarPlateEditorOpen(false);
+  setCarPlateInput('');
+  setCarPlateError(null);
+}, [selectedTicket?.id]);
 
   useEffect(() => {
     if (!showQueueMenu) return;
@@ -451,6 +452,16 @@ export default function ContactPanel() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showQueueMenu]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window === 'undefined') return;
+      setIsCompactHeight(window.innerHeight <= 1080);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const sortedNotes = useMemo(
     () =>
@@ -589,6 +600,8 @@ export default function ContactPanel() {
     ? 'bg-emerald-500 text-white hover:bg-emerald-600'
     : 'bg-rose-500 text-white hover:bg-rose-600';
   const isTicketActionDisabled = ticketActionLoading || contactBlocked;
+  const asidePaddingClass = isCompactHeight ? 'p-4' : 'p-5';
+  const asideGapClass = isCompactHeight ? 'gap-3' : 'gap-4';
 
   const handleTicketAction = async () => {
     if (!selectedTicket) return;
@@ -637,7 +650,7 @@ export default function ContactPanel() {
   return (
     <>
       <aside
-        className="hidden flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex"
+        className={`hidden h-full flex-col ${asideGapClass} border-l border-gray-200 bg-white ${asidePaddingClass} overflow-hidden xl:flex`}
         style={{ width: 'clamp(280px, 22vw, 24rem)' }}
       >
         {loading || !selectedContact ? (
@@ -645,7 +658,7 @@ export default function ContactPanel() {
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1 scrollbar-thin">
             <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
               <header className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600">Resumo do ticket</h3>

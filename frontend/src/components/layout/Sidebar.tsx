@@ -52,7 +52,7 @@ export default function Sidebar() {
   useEffect(() => {
     const updateLayout = () => {
       if (typeof window === 'undefined') return;
-      setIsCompact(window.innerHeight < 900);
+      setIsCompact(window.innerHeight <= 1080);
     };
     updateLayout();
     window.addEventListener('resize', updateLayout);
@@ -71,17 +71,17 @@ export default function Sidebar() {
   };
 
   const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
-  const sidebarPadding = isCompact ? 'py-4' : 'py-6';
-  const brandGapClass = isCompact ? 'gap-4' : 'gap-6';
-  const navMarginClass = isCompact ? 'mt-6' : 'mt-10';
+  const sidebarPadding = isCompact ? 'py-3' : 'py-6';
+  const brandGapClass = isCompact ? 'gap-3' : 'gap-6';
+  const navMarginClass = isCompact ? 'mt-4' : 'mt-10';
   const navGapClass = isCompact ? 'gap-2' : 'gap-3';
-  const buttonBaseClasses = isCompact ? 'h-10 w-10 rounded-lg' : 'h-11 w-11 rounded-xl';
-  const footerGapClass = isCompact ? 'gap-2' : 'gap-3';
-  const profileSizeClass = isCompact ? 'h-10 w-10' : 'h-11 w-11';
+  const buttonBaseClasses = isCompact ? 'h-9 w-9 rounded-lg' : 'h-11 w-11 rounded-xl';
+  const footerGapClass = isCompact ? 'gap-1.5' : 'gap-3';
+  const profileSizeClass = isCompact ? 'h-9 w-9 text-sm' : 'h-11 w-11';
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center border-r border-gray-200 bg-white ${sidebarPadding} transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900`}
+      className={`fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center overflow-y-auto border-r border-gray-200 bg-white ${sidebarPadding} scrollbar-thin transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900`}
     >
       <div className={`flex flex-col items-center ${brandGapClass}`}>
         <div className="group relative flex h-12 w-12 items-center justify-center">
