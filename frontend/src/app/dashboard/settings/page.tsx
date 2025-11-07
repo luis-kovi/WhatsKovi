@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 import Sidebar from '@/components/layout/Sidebar';
 import GeneralSettingsForm, { GeneralSettingsValues } from '@/components/settings/GeneralSettingsForm';
 import ServiceSettingsForm, { ServiceSettingsValues } from '@/components/settings/ServiceSettingsForm';
@@ -13,9 +14,14 @@ import WhatsAppConnectionsSection from '@/components/settings/WhatsAppConnection
 import QueueSettingsSection from '@/components/settings/QueueSettingsSection';
 import TagSettingsSection from '@/components/settings/TagSettingsSection';
 import { QuickReplySettingsSection } from '@/components/settings/QuickReplySettingsSection';
+import UserFilters from '@/components/users/UserFilters';
+import UserTable from '@/components/users/UserTable';
+import UserFormModal, { UserFormValues } from '@/components/users/UserFormModal';
+import UserDeleteModal from '@/components/users/UserDeleteModal';
 import { useAuthStore } from '@/store/authStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useUserStore, User, UserRole, UserStatus } from '@/store/userStore';
 import { useI18n } from '@/providers/I18nProvider';
 import type { LanguageCode } from '@/i18n/dictionaries';
 import { useRouter } from 'next/navigation';
@@ -61,10 +67,42 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettingsValues = {
   smtpSecure: true
 };
 
+type RoleFilter = 'ALL' | UserRole;
+type StatusFilter = 'ALL' | UserStatus;
+type SettingsTab =
+  | 'general'
+  | 'service'
+  | 'notifications'
+  | 'whatsapp'
+  | 'integrations'
+  | 'users';
+
+type ApiErrorResponse = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const apiError = error as ApiErrorResponse;
+    const responseMessage = apiError.response?.data?.error;
+    if (responseMessage) {
+      return responseMessage;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { t, setLanguage, setSupportedLanguages } = useI18n();
-  const { isAuthenticated, loadUser } = useAuthStore();
+  const { isAuthenticated, loadUser, user: currentUser } = useAuthStore();
   const queues = useMetadataStore((state) => state.queues);
   const tags = useMetadataStore((state) => state.tags);
   const fetchQueues = useMetadataStore((state) => state.fetchQueues);
@@ -75,6 +113,13 @@ export default function SettingsPage() {
   const createTag = useMetadataStore((state) => state.createTag);
   const updateTag = useMetadataStore((state) => state.updateTag);
   const deleteTag = useMetadataStore((state) => state.deleteTag);
+  const users = useUserStore((state) => state.users);
+  const usersLoading = useUserStore((state) => state.loading);
+  const userError = useUserStore((state) => state.error);
+  const fetchUsers = useUserStore((state) => state.fetchUsers);
+  const createUser = useUserStore((state) => state.createUser);
+  const updateUser = useUserStore((state) => state.updateUser);
+  const removeUser = useUserStore((state) => state.deleteUser);
   const {
     general,
     service,
@@ -118,10 +163,29 @@ export default function SettingsPage() {
   const [integrationLogs, setIntegrationLogs] = useState<IntegrationLogEntry[]>([]);
   const [loadingIntegration, setLoadingIntegration] = useState(true);
   const [savingIntegration, setSavingIntegration] = useState(false);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [usersInitialized, setUsersInitialized] = useState(false);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    if (activeTab === 'users' && !isAdmin) {
+      setActiveTab('general');
+    }
+  }, [activeTab, isAdmin]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -137,6 +201,24 @@ export default function SettingsPage() {
       fetchSettings();
     }
   }, [isAuthenticated, fetchQueues, fetchTags, fetchSettings, initialized]);
+
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    if (!isAuthenticated || !isAdmin || !currentUser) return;
+    if (usersInitialized) return;
+
+    const loadUsers = async () => {
+      try {
+        await fetchUsers();
+      } catch (error) {
+        toast.error(getErrorMessage(error, 'Erro ao carregar usuarios.'));
+      } finally {
+        setUsersInitialized(true);
+      }
+    };
+
+    loadUsers();
+  }, [activeTab, currentUser, fetchUsers, isAdmin, isAuthenticated, usersInitialized]);
 
   useEffect(() => {
     if (!general) return;
@@ -233,6 +315,38 @@ export default function SettingsPage() {
       Boolean(generalSettings && serviceSettings && notificationSettings),
     [isAuthenticated, loading, generalSettings, serviceSettings, notificationSettings]
   );
+
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return users
+      .filter((user) => (roleFilter === 'ALL' ? true : user.role === roleFilter))
+      .filter((user) => (statusFilter === 'ALL' ? true : user.status === statusFilter))
+      .filter((user) => {
+        if (!normalizedSearch) return true;
+        return (
+          user.name.toLowerCase().includes(normalizedSearch) ||
+          user.email.toLowerCase().includes(normalizedSearch)
+        );
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [users, roleFilter, statusFilter, search]);
+
+  const tabOptions = useMemo(() => {
+    const base: Array<{ id: SettingsTab; label: string }> = [
+      { id: 'general', label: 'Gerais' },
+      { id: 'service', label: 'Atendimento' },
+      { id: 'notifications', label: 'Notificações' },
+      { id: 'whatsapp', label: 'WhatsApp' },
+      { id: 'integrations', label: 'Integrações' }
+    ];
+
+    if (isAdmin) {
+      base.push({ id: 'users', label: 'Usuários' });
+    }
+
+    return base;
+  }, [isAdmin]);
 
   const handleGeneralChange = <Key extends keyof GeneralSettingsValues>(
     key: Key,
@@ -425,6 +539,87 @@ export default function SettingsPage() {
     await deleteTag(id);
   };
 
+  const handleOpenCreateUser = () => {
+    setFormMode('create');
+    setEditingUser(null);
+    setFormOpen(true);
+  };
+
+  const handleOpenEditUser = (user: User) => {
+    setFormMode('edit');
+    setEditingUser(user);
+    setFormOpen(true);
+  };
+
+  const handleCloseUserForm = () => {
+    setFormOpen(false);
+    setFormSubmitting(false);
+  };
+
+  const handleUserFormSubmit = async (values: UserFormValues) => {
+    setFormSubmitting(true);
+    try {
+      if (formMode === 'create') {
+        await createUser({
+          name: values.name,
+          email: values.email,
+          password: values.password || '',
+          role: values.role,
+          maxTickets: values.maxTickets
+        });
+        toast.success('Usuario cadastrado com sucesso.');
+      } else if (formMode === 'edit' && editingUser) {
+        await updateUser(editingUser.id, {
+          name: values.name,
+          email: values.email,
+          role: values.role,
+          status: values.status,
+          maxTickets: values.maxTickets,
+          password: values.password
+        });
+        toast.success('Usuario atualizado.');
+      }
+      setFormOpen(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Nao foi possivel salvar o usuario.'));
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const handleRefreshUsers = async () => {
+    try {
+      await fetchUsers();
+      toast.success('Lista atualizada.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Falha ao atualizar a lista.'));
+    }
+  };
+
+  const handleOpenDeleteUser = (user: User) => {
+    setDeletingUser(user);
+    setDeleteOpen(true);
+  };
+
+  const handleCancelDeleteUser = () => {
+    setDeleteOpen(false);
+    setDeletingUser(null);
+    setDeleteSubmitting(false);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!deletingUser) return;
+    setDeleteSubmitting(true);
+    try {
+      await removeUser(deletingUser.id);
+      toast.success('Usuario removido.');
+      handleCancelDeleteUser();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Nao foi possivel remover o usuario.'));
+      setDeleteSubmitting(false);
+    }
+  };
+
   if (!ready || !generalSettings || !serviceSettings || !notificationSettings) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -448,57 +643,144 @@ export default function SettingsPage() {
             </div>
           </header>
 
-          <GeneralSettingsForm
-            values={generalSettings}
-            supportedLanguages={supportedLanguagesState}
-            onChange={handleGeneralChange}
-            onUploadLogo={handleLogoUpload}
-            onRemoveLogo={generalSettings.logoUrl ? handleRemoveLogo : undefined}
-            onSave={handleGeneralSave}
-            saving={savingGeneral}
-          />
+          <div className="rounded-2xl bg-white/80 p-1 shadow-sm dark:bg-slate-900/70">
+            <div className="flex flex-wrap gap-2">
+              {tabOptions.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                    activeTab === tab.id
+                      ? 'bg-primary text-white shadow'
+                      : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800/80'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <ServiceSettingsForm
-            values={serviceSettings}
-            queues={queues}
-            onChange={handleServiceChange}
-            onSave={handleServiceSave}
-            saving={savingService}
-          />
+          <div className="space-y-8">
+            {activeTab === 'general' && (
+              <GeneralSettingsForm
+                values={generalSettings}
+                supportedLanguages={supportedLanguagesState}
+                onChange={handleGeneralChange}
+                onUploadLogo={handleLogoUpload}
+                onRemoveLogo={generalSettings.logoUrl ? handleRemoveLogo : undefined}
+                onSave={handleGeneralSave}
+                saving={savingGeneral}
+              />
+            )}
 
-          <NotificationSettingsForm
-            values={notificationSettings}
-            onChange={handleNotificationChange}
-            onSave={handleNotificationSave}
-            saving={savingNotifications}
-          />
+            {activeTab === 'service' && (
+              <div className="space-y-8">
+                <ServiceSettingsForm
+                  values={serviceSettings}
+                  queues={queues}
+                  onChange={handleServiceChange}
+                  onSave={handleServiceSave}
+                  saving={savingService}
+                />
 
-          <WhatsAppConnectionsSection />
+                <QueueSettingsSection
+                  queues={queues}
+                  onCreateQueue={handleCreateQueue}
+                  onUpdateQueue={handleUpdateQueue}
+                  onDeleteQueue={handleDeleteQueue}
+                />
 
-          <QueueSettingsSection
-            queues={queues}
-            onCreateQueue={handleCreateQueue}
-            onUpdateQueue={handleUpdateQueue}
-            onDeleteQueue={handleDeleteQueue}
-          />
+                <TagSettingsSection
+                  tags={tags}
+                  onCreateTag={handleCreateTag}
+                  onUpdateTag={handleUpdateTag}
+                  onDeleteTag={handleDeleteTag}
+                />
 
-          <TagSettingsSection
-            tags={tags}
-            onCreateTag={handleCreateTag}
-            onUpdateTag={handleUpdateTag}
-            onDeleteTag={handleDeleteTag}
-          />
+                <QuickReplySettingsSection />
+              </div>
+            )}
 
-          <QuickReplySettingsSection />
+            {activeTab === 'notifications' && (
+              <NotificationSettingsForm
+                values={notificationSettings}
+                onChange={handleNotificationChange}
+                onSave={handleNotificationSave}
+                saving={savingNotifications}
+              />
+            )}
 
-          <IntegrationSettings
-            initialValues={integrationValues}
-            loading={loadingIntegration}
-            saving={savingIntegration}
-            logs={integrationLogs}
-            onSave={handleIntegrationSave}
-            onRefreshLogs={handleRefreshIntegrationLogs}
-          />
+            {activeTab === 'whatsapp' && <WhatsAppConnectionsSection />}
+
+            {activeTab === 'integrations' && (
+              <IntegrationSettings
+                initialValues={integrationValues}
+                loading={loadingIntegration}
+                saving={savingIntegration}
+                logs={integrationLogs}
+                onSave={handleIntegrationSave}
+                onRefreshLogs={handleRefreshIntegrationLogs}
+              />
+            )}
+
+            {activeTab === 'users' && isAdmin && (
+              <div>
+                <UserFilters
+                  search={search}
+                  role={roleFilter}
+                  status={statusFilter}
+                  onSearch={setSearch}
+                  onRoleChange={(value) => setRoleFilter(value as RoleFilter)}
+                  onStatusChange={(value) => setStatusFilter(value as StatusFilter)}
+                  onCreate={handleOpenCreateUser}
+                  onRefresh={handleRefreshUsers}
+                  refreshing={usersLoading}
+                />
+
+                <div className="mt-6 space-y-4">
+                  {userError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                      {userError}
+                    </div>
+                  )}
+
+                  <div className={usersLoading ? 'pointer-events-none opacity-60' : ''}>
+                    <UserTable
+                      users={filteredUsers}
+                      onEdit={handleOpenEditUser}
+                      onDelete={handleOpenDeleteUser}
+                    />
+                  </div>
+
+                  {usersLoading && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Atualizando lista de usuarios...
+                    </div>
+                  )}
+                </div>
+
+                <UserFormModal
+                  open={formOpen}
+                  mode={formMode}
+                  initialData={formMode === 'edit' ? editingUser ?? undefined : undefined}
+                  submitting={formSubmitting}
+                  onClose={handleCloseUserForm}
+                  onSubmit={handleUserFormSubmit}
+                />
+
+                <UserDeleteModal
+                  open={deleteOpen}
+                  user={deletingUser}
+                  submitting={deleteSubmitting}
+                  onCancel={handleCancelDeleteUser}
+                  onConfirm={handleConfirmDeleteUser}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
