@@ -553,7 +553,10 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 
   return (
     <>
-      <div className="flex w-[420px] flex-col border-r border-gray-200 bg-white">
+      <div
+        className="flex flex-col border-r border-gray-200 bg-white"
+        style={{ width: 'clamp(320px, 27vw, 420px)' }}
+      >
         <div className="border-b border-gray-200 p-4">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
@@ -1061,7 +1064,6 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
 
 
 

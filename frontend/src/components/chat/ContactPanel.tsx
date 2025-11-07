@@ -636,7 +636,10 @@ export default function ContactPanel() {
 
   return (
     <>
-      <aside className="hidden w-96 flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex">
+      <aside
+        className="hidden flex-col gap-4 border-l border-gray-200 bg-white p-5 xl:flex"
+        style={{ width: 'clamp(280px, 22vw, 24rem)' }}
+      >
         {loading || !selectedContact ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />

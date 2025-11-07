@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -46,6 +47,17 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const { t } = useI18n();
+  const [isCompact, setIsCompact] = useState(false);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      if (typeof window === 'undefined') return;
+      setIsCompact(window.innerHeight < 900);
+    };
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
 
   const handleNavigate = (href: string) => {
     if (pathname !== href) {
@@ -59,10 +71,19 @@ export default function Sidebar() {
   };
 
   const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
+  const sidebarPadding = isCompact ? 'py-4' : 'py-6';
+  const brandGapClass = isCompact ? 'gap-4' : 'gap-6';
+  const navMarginClass = isCompact ? 'mt-6' : 'mt-10';
+  const navGapClass = isCompact ? 'gap-2' : 'gap-3';
+  const buttonBaseClasses = isCompact ? 'h-10 w-10 rounded-lg' : 'h-11 w-11 rounded-xl';
+  const footerGapClass = isCompact ? 'gap-2' : 'gap-3';
+  const profileSizeClass = isCompact ? 'h-10 w-10' : 'h-11 w-11';
 
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center border-r border-gray-200 bg-white py-6 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-col items-center gap-6">
+    <aside
+      className={`fixed left-0 top-0 z-50 flex h-screen w-20 flex-col items-center border-r border-gray-200 bg-white ${sidebarPadding} transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900`}
+    >
+      <div className={`flex flex-col items-center ${brandGapClass}`}>
         <div className="group relative flex h-12 w-12 items-center justify-center">
           <Image
             src="/brand/icone.png"
@@ -80,7 +101,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="mt-10 flex flex-1 flex-col items-center gap-3">
+      <nav className={`${navMarginClass} flex flex-1 flex-col items-center ${navGapClass}`}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -91,7 +112,7 @@ export default function Sidebar() {
             <button
               key={item.href}
               onClick={() => handleNavigate(item.href)}
-              className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-all ${
+              className={`group relative flex items-center justify-center ${buttonBaseClasses} transition-all ${
                 isActive
                   ? 'bg-gradient-to-br from-primary to-secondary text-white scale-105'
                   : 'text-gray-600 hover:bg-gray-100 hover:scale-105 dark:text-slate-300 dark:hover:bg-slate-800'
@@ -108,9 +129,11 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="flex flex-col items-center gap-3">
+      <div className={`flex flex-col items-center ${footerGapClass}`}>
         <div className="group relative">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-slate-800">
+          <div
+            className={`flex items-center justify-center ${buttonBaseClasses} transition-all hover:bg-gray-100 dark:hover:bg-slate-800`}
+          >
             <NotificationBell />
           </div>
           <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
@@ -120,7 +143,9 @@ export default function Sidebar() {
         </div>
 
         <div className="group relative">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-slate-800">
+          <div
+            className={`flex items-center justify-center ${buttonBaseClasses} transition-all hover:bg-gray-100 dark:hover:bg-slate-800`}
+          >
             <ThemeToggle />
           </div>
           <div className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-slate-700">
@@ -130,7 +155,9 @@ export default function Sidebar() {
         </div>
 
         <div className="group relative mt-2">
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-gray-200 to-gray-300 font-semibold text-gray-700 transition-transform hover:scale-105 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200">
+          <div
+            className={`relative flex ${profileSizeClass} items-center justify-center rounded-full bg-gradient-to-br from-gray-200 to-gray-300 font-semibold text-gray-700 transition-transform hover:scale-105 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200`}
+          >
             {(user?.name?.charAt(0)?.toUpperCase() ?? '?')}
             <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500 dark:border-slate-900" />
           </div>
@@ -143,7 +170,7 @@ export default function Sidebar() {
 
         <button
           onClick={handleLogout}
-          className="group relative mt-2 flex h-11 w-11 items-center justify-center rounded-xl text-red-600 transition-all hover:bg-red-50 hover:scale-105 dark:hover:bg-red-500/10"
+          className={`group relative mt-2 flex items-center justify-center ${buttonBaseClasses} text-red-600 transition-all hover:bg-red-50 hover:scale-105 dark:hover:bg-red-500/10`}
           aria-label={t('nav.logout')}
         >
           <LogOut size={18} strokeWidth={1.9} />

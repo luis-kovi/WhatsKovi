@@ -9,11 +9,13 @@ import ContactPanel from '@/components/chat/ContactPanel';
 import { useAuthStore } from '@/store/authStore';
 import { useTicketStore } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
+import { useDashboardResponsiveScale } from '@/hooks/useDashboardResponsiveScale';
 
 export default function DashboardPage() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const loadUser = useAuthStore((state) => state.loadUser);
+  useDashboardResponsiveScale();
 
   const fetchTickets = useTicketStore((state) => state.fetchTickets);
   const setupTicketSocket = useTicketStore((state) => state.setupSocketListeners);
@@ -64,9 +66,9 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 transition-colors duration-300 dark:bg-slate-950">
       <Sidebar />
-      <div className="ml-20 flex flex-1 flex-col overflow-hidden">
-        <main className="flex flex-1 overflow-hidden">
-          <div className="flex flex-1 overflow-hidden">
+      <div className="ml-20 flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="flex min-w-0 flex-1 overflow-hidden">
+          <div className="flex min-w-0 flex-1 overflow-hidden">
             <TicketList />
             <ChatArea />
             <ContactPanel />

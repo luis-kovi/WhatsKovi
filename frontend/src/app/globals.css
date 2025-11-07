@@ -6,6 +6,7 @@
   --color-primary: 255 53 90;
   --color-secondary: 124 58 237;
   --color-accent: 124 58 237;
+  font-size: var(--dashboard-font-size, 16px);
 }
 
 * {
