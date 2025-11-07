@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Tag as TagIcon,
   Mic,
-  Plus,
   RotateCcw,
   Download,
   Loader2,
@@ -22,7 +21,8 @@ import {
   X,
   Lock,
   Unlock,
-  Clock3
+  Clock3,
+  Flag
 } from 'lucide-react';
 import { useTicketStore, TicketMessage, MessageChannel } from '@/store/ticketStore';
 import { useMetadataStore } from '@/store/metadataStore';
@@ -36,6 +36,11 @@ import { QuickReplyModal } from '@/components/chat/QuickReplyModal';
 import { ChatExportModal } from '@/components/chat/ChatExportModal';
 import { useQuickReplyStore } from '@/store/quickReplyStore';
 import ScheduledMessageSection from '@/components/chat/ScheduledMessageSection';
+import {
+  TICKET_PRIORITY_OPTIONS,
+  TICKET_PRIORITY_LABELS,
+  TICKET_PRIORITY_COLORS
+} from '@/constants/ticketPriority';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 
@@ -234,22 +239,28 @@ export default function ChatArea() {
 
   const {
     selectedTicket,
-    createManualTicket,
+    updateTicketDetails,
+    addTicketTags,
+    removeTicketTag,
     aiSuggestionsByMessage,
     aiChatbotDrafts,
     regenerateSuggestions,
     previewChatbotReply
   } = useTicketStore((state) => ({
     selectedTicket: state.selectedTicket,
-    createManualTicket: state.createManualTicket,
+    updateTicketDetails: state.updateTicketDetails,
+    addTicketTags: state.addTicketTags,
+    removeTicketTag: state.removeTicketTag,
     aiSuggestionsByMessage: state.aiSuggestionsByMessage,
     aiChatbotDrafts: state.aiChatbotDrafts,
     regenerateSuggestions: state.regenerateSuggestions,
     previewChatbotReply: state.previewChatbotReply
   }));
 
-  const { reactionPalette } = useMetadataStore((state) => ({
-    reactionPalette: state.reactionPalette
+  const { reactionPalette, tags, fetchTags } = useMetadataStore((state) => ({
+    reactionPalette: state.reactionPalette,
+    tags: state.tags,
+    fetchTags: state.fetchTags
   }));
 
   const { selectedContact, updateContact } = useContactStore((state) => ({
@@ -305,7 +316,6 @@ export default function ChatArea() {
   const [isRegeneratingSuggestions, setIsRegeneratingSuggestions] = useState(false);
   const [isAiSuggestionsVisible, setIsAiSuggestionsVisible] = useState(false);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-  const [creatingFollowUpTicket, setCreatingFollowUpTicket] = useState(false);
   const [scheduledModalOpen, setScheduledModalOpen] = useState(false);
   const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<TicketMessage | null>(null);
@@ -314,6 +324,8 @@ export default function ChatArea() {
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [processingBlockToggle, setProcessingBlockToggle] = useState(false);
+  const [showPriorityMenu, setShowPriorityMenu] = useState(false);
+  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
 
 
   const scheduledMessages = useMemo(() => {
@@ -327,6 +339,10 @@ export default function ChatArea() {
     selectedContact?.email ?? selectedTicket?.contact.email ?? ''
   ).trim();
   const contactBlocked = selectedContact?.isBlocked ?? false;
+  const activeTagIds = useMemo(
+    () => selectedTicket?.tags.map((relation) => relation.tag.id) ?? [],
+    [selectedTicket?.tags]
+  );
 
   const activeChannel = useMemo<MessageChannel>(() => {
     if (isPrivate) {
@@ -337,12 +353,51 @@ export default function ChatArea() {
   }, [isPrivate, selectedTicket?.type]);
 
   const isTicketClosed = selectedTicket?.status === 'CLOSED';
+  const disableTicketAdjustments = contactBlocked || isTicketClosed;
+  const currentPriority = selectedTicket?.priority ?? 'LOW';
+  const priorityLabel = TICKET_PRIORITY_LABELS[currentPriority] ?? currentPriority;
+  const priorityIndicatorClass = TICKET_PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
   const conversationLocked = isTicketClosed || contactBlocked;
   const conversationLockedMessage = contactBlocked ? 'Contato bloqueado.' : 'Atendimento encerrado.';
   useEffect(() => {
     setBlockModalOpen(false);
     setProcessingBlockToggle(false);
   }, [selectedContact?.id]);
+  useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
+  useEffect(() => {
+    setShowPriorityMenu(false);
+    setIsTagMenuOpen(false);
+  }, [selectedTicket?.id]);
+  useEffect(() => {
+    if (!showPriorityMenu && !isTagMenuOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (showPriorityMenu) {
+        const menu = priorityMenuRef.current;
+        const button = priorityButtonRef.current;
+        if (menu && !menu.contains(target) && (!button || !button.contains(target))) {
+          setShowPriorityMenu(false);
+        }
+      }
+
+      if (isTagMenuOpen) {
+        const menu = tagMenuRef.current;
+        const button = tagButtonRef.current;
+        if (menu && !menu.contains(target) && (!button || !button.contains(target))) {
+          setIsTagMenuOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPriorityMenu, isTagMenuOpen]);
   const [messageToDelete, setMessageToDelete] = useState<TicketMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -389,6 +444,10 @@ export default function ChatArea() {
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shouldDiscardRecordingRef = useRef(false);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const priorityButtonRef = useRef<HTMLButtonElement | null>(null);
+  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
+  const tagButtonRef = useRef<HTMLButtonElement | null>(null);
+  const tagMenuRef = useRef<HTMLDivElement | null>(null);
 
   const exportPreview = useMemo(
     () =>
@@ -801,37 +860,6 @@ export default function ChatArea() {
     }
   };
 
-  const handleCreateFollowUpTicket = async () => {
-    if (!selectedTicket || creatingFollowUpTicket) return;
-
-    const phone = selectedTicket.contact.phoneNumber;
-    const confirmed = window.confirm(
-      `Confirma abertura de um novo ticket de atendimento para o telefone ${phone}?`
-    );
-    if (!confirmed) return;
-
-    setCreatingFollowUpTicket(true);
-    try {
-      const tagIds = selectedTicket.tags.map((relation) => relation.tag.id);
-      await createManualTicket({
-        phoneNumber: selectedTicket.contact.phoneNumber,
-        name: selectedTicket.contact.name,
-        queueId: selectedTicket.queue?.id ?? undefined,
-        priority: selectedTicket.priority,
-        tagIds: tagIds.length > 0 ? tagIds : undefined,
-        carPlate: selectedTicket.carPlate ?? undefined,
-        type: selectedTicket.type,
-        email: selectedTicket.contact.email ?? undefined
-      });
-      toast.success('Novo ticket criado para este contato.');
-    } catch (error) {
-      console.error('Erro ao criar novo ticket para contato:', error);
-      toast.error('Nao foi possivel criar o novo ticket.');
-    } finally {
-      setCreatingFollowUpTicket(false);
-    }
-  };
-
   const handleInsertQuickReply = (message: string) => {
     setNewMessage((current) => (current ? `${current}\n${message}` : message));
     setQuickReplyModalOpen(false);
@@ -1028,6 +1056,35 @@ export default function ChatArea() {
     }
   };
 
+  const handlePriorityChange = async (priority: string) => {
+    if (!selectedTicket) return;
+
+    setShowPriorityMenu(false);
+    try {
+      await updateTicketDetails(selectedTicket.id, { priority });
+      toast.success('Prioridade atualizada');
+    } catch (error) {
+      console.error('Erro ao atualizar prioridade:', error);
+      toast.error('Nao foi possivel atualizar a prioridade.');
+    }
+  };
+
+  const handleToggleTag = async (tagId: string) => {
+    if (!selectedTicket) return;
+    try {
+      if (activeTagIds.includes(tagId)) {
+        await removeTicketTag(selectedTicket.id, tagId);
+        toast.success('Tag removida do atendimento');
+      } else {
+        await addTicketTags(selectedTicket.id, [tagId]);
+        toast.success('Tag aplicada ao atendimento');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar tags do ticket:', error);
+      toast.error('Nao foi possivel atualizar as tags.');
+    }
+  };
+
   const handleExportConversation = () => {
     if (!selectedTicket) return;
     setExportModalOpen(true);
@@ -1129,7 +1186,106 @@ export default function ChatArea() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                ref={priorityButtonRef}
+                disabled={disableTicketAdjustments}
+                onClick={() => {
+                  if (disableTicketAdjustments) return;
+                  setShowPriorityMenu((prev) => !prev);
+                  setIsTagMenuOpen(false);
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  disableTicketAdjustments ? 'bg-gray-200 text-gray-500' : 'bg-primary text-white hover:bg-primary/90'
+                }`}
+              >
+                <Flag size={14} />
+                <div className="flex items-center gap-1">
+                  <span>Prioridade</span>
+                  <span className={`h-2 w-2 rounded-full ${priorityIndicatorClass}`} />
+                  <span className="hidden text-[11px] font-normal sm:inline">{priorityLabel}</span>
+                </div>
+              </button>
+              {showPriorityMenu && (
+                <div
+                  ref={priorityMenuRef}
+                  className="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-xl"
+                >
+                  {TICKET_PRIORITY_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handlePriorityChange(option.value)}
+                      className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
+                    >
+                      <span>{option.label}</span>
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          TICKET_PRIORITY_COLORS[option.value] ?? 'bg-gray-300'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                ref={tagButtonRef}
+                disabled={disableTicketAdjustments}
+                onClick={() => {
+                  if (disableTicketAdjustments) return;
+                  setIsTagMenuOpen((prev) => !prev);
+                  setShowPriorityMenu(false);
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  disableTicketAdjustments ? 'bg-gray-200 text-gray-500' : 'bg-accent text-white hover:bg-accent/80'
+                }`}
+              >
+                <TagIcon size={14} />
+                <span>Tags</span>
+                {activeTagIds.length > 0 && (
+                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">
+                    {activeTagIds.length}
+                  </span>
+                )}
+              </button>
+              {isTagMenuOpen && (
+                <div
+                  ref={tagMenuRef}
+                  className="absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-2xl"
+                >
+                  <p className="text-[10px] font-semibold uppercase text-gray-400">Selecione tags</p>
+                  <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
+                    {tags.length === 0 ? (
+                      <span className="text-[11px] text-gray-500">Nenhuma tag cadastrada.</span>
+                    ) : (
+                      tags.map((tag) => {
+                        const active = activeTagIds.includes(tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => handleToggleTag(tag.id)}
+                            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition ${
+                              active ? 'bg-primary text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                            #{tag.name}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={handleExportConversation}
@@ -1159,18 +1315,6 @@ export default function ChatArea() {
                 <Unlock size={14} />
               )}
             </button>
-
-            {selectedTicket.status === 'CLOSED' && !contactBlocked && (
-              <button
-                type="button"
-                onClick={handleCreateFollowUpTicket}
-                disabled={creatingFollowUpTicket}
-                className="inline-flex items-center gap-1 rounded-lg border border-primary px-3 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {creatingFollowUpTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus size={14} />}
-                Criar novo ticket
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1455,15 +1599,13 @@ export default function ChatArea() {
               </button>
               <button
                 type='button'
-                onClick={async () => {
-                  if (isGeneratingDraft || !latestCustomerMessage?.body) return;
-                  await handleGenerateChatbotReply();
-                }}
-                disabled={conversationLocked || isGeneratingDraft || !latestCustomerMessage?.body}
-                className='flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-not-allowed disabled:bg-violet-400'
-                title='IA responde'
+                onClick={handleOpenScheduledModal}
+                disabled={conversationLocked}
+                className='relative flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
+                title='Agendamentos'
               >
-                {isGeneratingDraft ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles size={16} />}
+                <Clock3 size={18} />
+                {hasScheduledMessages && <span className='absolute right-1 top-1 h-2 w-2 rounded-full bg-primary' />}
               </button>
               <button
                 type='button'
@@ -1483,13 +1625,15 @@ export default function ChatArea() {
               </button>
               <button
                 type='button'
-                onClick={handleOpenScheduledModal}
-                disabled={conversationLocked}
-                className='relative flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60'
-                title='Agendamentos'
+                onClick={async () => {
+                  if (isGeneratingDraft || !latestCustomerMessage?.body) return;
+                  await handleGenerateChatbotReply();
+                }}
+                disabled={conversationLocked || isGeneratingDraft || !latestCustomerMessage?.body}
+                className='flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-not-allowed disabled:bg-violet-400'
+                title='IA responde'
               >
-                <Clock3 size={18} />
-                {hasScheduledMessages && <span className='absolute right-1 top-1 h-2 w-2 rounded-full bg-primary' />}
+                {isGeneratingDraft ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles size={16} />}
               </button>
 
               {showEmojiPicker && (

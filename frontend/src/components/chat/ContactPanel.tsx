@@ -9,9 +9,7 @@ import {
   Clock3,
   Tags,
   ChevronRight,
-  Flag,
   Layers,
-  Tag as TagIcon,
   Car,
   Loader2,
   Pencil
@@ -21,6 +19,7 @@ import { useTicketStore } from '@/store/ticketStore';
 import { useContactStore, ContactInternalNote, ContactTicketSummary } from '@/store/contactStore';
 import { useMetadataStore } from '@/store/metadataStore';
 import { normalizeCarPlate, isValidCarPlate } from '@/utils/carPlate';
+import { TICKET_PRIORITY_LABELS, TICKET_PRIORITY_COLORS } from '@/constants/ticketPriority';
 
 const STATUS_LABELS: Record<string, string> = {
   BOT: 'Chatbot',
@@ -46,27 +45,6 @@ const TICKET_TYPE_STYLES: Record<string, string> = {
   WHATSAPP: 'bg-emerald-100 text-emerald-700',
   EMAIL: 'bg-sky-100 text-sky-600',
   SMS: 'bg-purple-100 text-purple-600'
-};
-
-const PRIORITY_OPTIONS = [
-  { value: 'LOW', label: 'Baixa' },
-  { value: 'MEDIUM', label: 'Media' },
-  { value: 'HIGH', label: 'Alta' },
-  { value: 'URGENT', label: 'Urgente' }
-] as const;
-
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: 'Baixa',
-  MEDIUM: 'Media',
-  HIGH: 'Alta',
-  URGENT: 'Urgente'
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW: 'bg-emerald-500',
-  MEDIUM: 'bg-amber-400',
-  HIGH: 'bg-orange-500',
-  URGENT: 'bg-rose-500'
 };
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
@@ -387,8 +365,6 @@ export default function ContactPanel() {
     selectedTicket,
     selectTicket,
     updateTicketDetails,
-    addTicketTags,
-    removeTicketTag,
     acceptTicket,
     closeTicket,
     createManualTicket
@@ -396,8 +372,6 @@ export default function ContactPanel() {
     selectedTicket: state.selectedTicket,
     selectTicket: state.selectTicket,
     updateTicketDetails: state.updateTicketDetails,
-    addTicketTags: state.addTicketTags,
-    removeTicketTag: state.removeTicketTag,
     acceptTicket: state.acceptTicket,
     closeTicket: state.closeTicket,
     createManualTicket: state.createManualTicket
@@ -420,27 +394,19 @@ export default function ContactPanel() {
     createNote: state.createNote
   }));
 
-  const { tags, queues, fetchTags, fetchQueues } = useMetadataStore((state) => ({
-    tags: state.tags,
+  const { queues, fetchQueues } = useMetadataStore((state) => ({
     queues: state.queues,
-    fetchTags: state.fetchTags,
     fetchQueues: state.fetchQueues
   }));
 
-  const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showQueueMenu, setShowQueueMenu] = useState(false);
-  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const [isCarPlateEditorOpen, setCarPlateEditorOpen] = useState(false);
   const [carPlateInput, setCarPlateInput] = useState('');
   const [carPlateError, setCarPlateError] = useState<string | null>(null);
   const [carPlateSaving, setCarPlateSaving] = useState(false);
 
-  const priorityButtonRef = useRef<HTMLButtonElement | null>(null);
-  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const queueButtonRef = useRef<HTMLButtonElement | null>(null);
   const queueMenuRef = useRef<HTMLDivElement | null>(null);
-  const tagButtonRef = useRef<HTMLButtonElement | null>(null);
-  const tagMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [noteDetail, setNoteDetail] = useState<ContactInternalNote | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -460,55 +426,31 @@ export default function ContactPanel() {
   }, [selectedTicket, loadContact, fetchContactNotes, clearSelected]);
 
   useEffect(() => {
-    fetchTags();
     fetchQueues();
-  }, [fetchTags, fetchQueues]);
+  }, [fetchQueues]);
 
   useEffect(() => {
-    setShowPriorityMenu(false);
     setShowQueueMenu(false);
-    setIsTagMenuOpen(false);
     setCarPlateEditorOpen(false);
     setCarPlateInput('');
     setCarPlateError(null);
   }, [selectedTicket?.id]);
 
   useEffect(() => {
-    if (!showPriorityMenu && !showQueueMenu && !isTagMenuOpen) {
-      return;
-    }
+    if (!showQueueMenu) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-
-      if (showPriorityMenu) {
-        const menu = priorityMenuRef.current;
-        const button = priorityButtonRef.current;
-        if (menu && !menu.contains(target) && (!button || !button.contains(target))) {
-          setShowPriorityMenu(false);
-        }
-      }
-
-      if (showQueueMenu) {
-        const menu = queueMenuRef.current;
-        const button = queueButtonRef.current;
-        if (menu && !menu.contains(target) && (!button || !button.contains(target))) {
-          setShowQueueMenu(false);
-        }
-      }
-
-      if (isTagMenuOpen) {
-        const menu = tagMenuRef.current;
-        const button = tagButtonRef.current;
-        if (menu && !menu.contains(target) && (!button || !button.contains(target))) {
-          setIsTagMenuOpen(false);
-        }
+      const menu = queueMenuRef.current;
+      const button = queueButtonRef.current;
+      if (menu && !menu.contains(target) && (!button || !button.contains(target))) {
+        setShowQueueMenu(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showPriorityMenu, showQueueMenu, isTagMenuOpen]);
+  }, [showQueueMenu]);
 
   const sortedNotes = useMemo(
     () =>
@@ -522,11 +464,6 @@ export default function ContactPanel() {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [selectedContact]);
-
-  const activeTagIds = useMemo(
-    () => selectedTicket?.tags.map((relation) => relation.tag.id) ?? [],
-    [selectedTicket?.tags]
-  );
 
   const contactBlocked = selectedContact?.isBlocked ?? false;
 
@@ -553,19 +490,6 @@ export default function ContactPanel() {
     setTicketHistoryOpen(false);
   };
 
-  const handlePriorityChange = async (priority: string) => {
-    if (!selectedTicket) return;
-
-    setShowPriorityMenu(false);
-    try {
-      await updateTicketDetails(selectedTicket.id, { priority });
-      toast.success('Prioridade atualizada');
-    } catch (error) {
-      console.error('Erro ao atualizar prioridade:', error);
-      toast.error('Nao foi possivel atualizar a prioridade.');
-    }
-  };
-
   const handleQueueChange = async (queueId: string | null) => {
     if (!selectedTicket) return;
 
@@ -576,22 +500,6 @@ export default function ContactPanel() {
     } catch (error) {
       console.error('Erro ao atualizar fila:', error);
       toast.error('Nao foi possivel atualizar a fila.');
-    }
-  };
-
-  const handleToggleTag = async (tagId: string) => {
-    if (!selectedTicket) return;
-    try {
-      if (activeTagIds.includes(tagId)) {
-        await removeTicketTag(selectedTicket.id, tagId);
-        toast.success('Tag removida do atendimento');
-      } else {
-        await addTicketTags(selectedTicket.id, [tagId]);
-        toast.success('Tag aplicada ao atendimento');
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar tags do ticket:', error);
-      toast.error('Nao foi possivel atualizar as tags.');
     }
   };
 
@@ -660,8 +568,8 @@ export default function ContactPanel() {
   const ticketTypeLabel = TICKET_TYPE_LABELS[ticket.type] ?? ticket.type;
   const ticketTypeClass = TICKET_TYPE_STYLES[ticket.type] ?? 'bg-gray-100 text-gray-600 border border-gray-200';
   const currentPriority = ticket.priority ?? 'LOW';
-  const priorityLabel = PRIORITY_LABELS[currentPriority] ?? currentPriority;
-  const priorityIndicatorClass = PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
+  const priorityLabel = TICKET_PRIORITY_LABELS[currentPriority] ?? currentPriority;
+  const priorityIndicatorClass = TICKET_PRIORITY_COLORS[currentPriority] ?? 'bg-gray-300';
   const queueLabel = ticket.queue ? ticket.queue.name : 'Sem fila';
   const contactName = ticket.contact.name;
   const contactPhone = ticket.contact.phoneNumber;
@@ -671,7 +579,7 @@ export default function ContactPanel() {
   const requiresAcceptance = ticket.status === 'PENDING' || ticket.status === 'BOT';
   const disableTicketAdjustments = contactBlocked || isTicketClosed;
   const ticketActionLabel = isTicketClosed
-    ? 'Abrir ticket'
+    ? 'Reabrir Ticket'
     : requiresAcceptance
     ? 'Aceitar ticket'
     : 'Finalizar ticket';
@@ -797,151 +705,63 @@ export default function ContactPanel() {
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    ref={priorityButtonRef}
-                    disabled={disableTicketAdjustments}
-                    onClick={() => {
-                      if (disableTicketAdjustments) return;
-                      setShowPriorityMenu((prev) => !prev);
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${
-                      disableTicketAdjustments ? 'bg-gray-200 text-gray-500' : 'bg-primary text-white hover:bg-primary/90'
-                    }`}
-                  >
-                    <Flag size={16} />
-                    Prioridade
-                  </button>
-                  {showPriorityMenu && (
-                    <div
-                      ref={priorityMenuRef}
-                      className="absolute left-0 top-full z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-lg"
+                <div className="col-span-2 grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      ref={queueButtonRef}
+                      disabled={disableTicketAdjustments}
+                      onClick={() => {
+                        if (disableTicketAdjustments) return;
+                        setShowQueueMenu((prev) => !prev);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-secondary/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                        disableTicketAdjustments
+                          ? 'bg-gray-200 text-gray-500'
+                          : 'bg-secondary text-white hover:bg-secondary/80'
+                      }`}
                     >
-                      {PRIORITY_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => handlePriorityChange(option.value)}
-                          className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
-                        >
-                          <span>{option.label}</span>
-                          <span
-                            className={`h-2.5 w-2.5 rounded-full ${PRIORITY_COLORS[option.value] ?? 'bg-gray-300'}`}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    ref={queueButtonRef}
-                    disabled={disableTicketAdjustments}
-                    onClick={() => {
-                      if (disableTicketAdjustments) return;
-                      setShowQueueMenu((prev) => !prev);
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-secondary/40 disabled:cursor-not-allowed disabled:opacity-60 ${
-                      disableTicketAdjustments
-                        ? 'bg-gray-200 text-gray-500'
-                        : 'bg-secondary text-white hover:bg-secondary/80'
-                    }`}
-                  >
-                    <Layers size={16} />
-                    Transferir
-                  </button>
-                  {showQueueMenu && (
-                    <div
-                      ref={queueMenuRef}
-                      className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-2 shadow-lg"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleQueueChange(null)}
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs text-gray-600 hover:bg-gray-100"
+                      <Layers size={16} />
+                      Transferir
+                    </button>
+                    {showQueueMenu && (
+                      <div
+                        ref={queueMenuRef}
+                        className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-2 shadow-lg"
                       >
-                        Remover fila
-                      </button>
-                      <div className="my-1 border-t border-gray-100" />
-                      {queues.map((queue) => (
                         <button
-                          key={queue.id}
                           type="button"
-                          onClick={() => handleQueueChange(queue.id)}
+                          onClick={() => handleQueueChange(null)}
                           className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs text-gray-600 hover:bg-gray-100"
                         >
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: queue.color }} />
-                          {queue.name}
+                          Remover fila
                         </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        <div className="my-1 border-t border-gray-100" />
+                        {queues.map((queue) => (
+                          <button
+                            key={queue.id}
+                            type="button"
+                            onClick={() => handleQueueChange(queue.id)}
+                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs text-gray-600 hover:bg-gray-100"
+                          >
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: queue.color }} />
+                            {queue.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                <div className="relative col-span-2">
                   <button
                     type="button"
-                    ref={tagButtonRef}
-                    disabled={disableTicketAdjustments}
-                    onClick={() => {
-                      if (disableTicketAdjustments) return;
-                      setIsTagMenuOpen((prev) => !prev);
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60 ${
-                      disableTicketAdjustments
-                        ? 'bg-gray-200 text-gray-500'
-                        : 'bg-accent text-white hover:bg-accent/80'
-                    }`}
+                    onClick={handleTicketAction}
+                    disabled={isTicketActionDisabled}
+                    className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${ticketActionClass}`}
                   >
-                    <TagIcon size={16} />
-                    Tags
+                    {ticketActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {ticketActionLabel}
                   </button>
-                  {isTagMenuOpen && (
-                    <div
-                      ref={tagMenuRef}
-                      className="absolute left-0 top-full z-40 mt-2 w-full rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
-                    >
-                      <p className="text-[10px] font-semibold uppercase text-gray-400">Selecione tags</p>
-                      <div className="mt-2 flex flex-col gap-1">
-                        {tags.length === 0 ? (
-                          <span className="text-[11px] text-gray-500">Nenhuma tag cadastrada.</span>
-                        ) : (
-                          tags.map((tag) => {
-                            const active = activeTagIds.includes(tag.id);
-                            return (
-                              <button
-                                key={tag.id}
-                                type="button"
-                                onClick={() => handleToggleTag(tag.id)}
-                                className={`flex items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition ${
-                                  active
-                                    ? 'bg-primary text-white'
-                                    : 'border border-gray-200 text-gray-600 hover:bg-gray-100'
-                                }`}
-                              >
-                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
-                                #{tag.name}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleTicketAction}
-                  disabled={isTicketActionDisabled}
-                  className={`col-span-2 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 ${ticketActionClass}`}
-                >
-                  {ticketActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {ticketActionLabel}
-                </button>
               </div>
             </section>
 
