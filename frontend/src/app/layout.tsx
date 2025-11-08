@@ -69,8 +69,8 @@ export const metadata: Metadata = {
   description: 'Sistema de gestão de atendimentos via WhatsApp',
   manifest: '/manifest.json',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#0EA5E9' },
-    { media: '(prefers-color-scheme: dark)', color: '#0EA5E9' }
+    { media: '(prefers-color-scheme: light)', color: '#F1F5F9' },
+    { media: '(prefers-color-scheme: dark)', color: '#0F172A' }
   ],
   icons: {
     icon: [
