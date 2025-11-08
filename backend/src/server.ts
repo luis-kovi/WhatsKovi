@@ -58,6 +58,16 @@ app.use(
 
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 app.use('/survey', satisfactionPublicRoutes);
 app.use('/api', routes);
 

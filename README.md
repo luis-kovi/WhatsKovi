@@ -249,17 +249,37 @@ WhatsKovi/
 
 ## 🚀 Deploy
 
-### Frontend (Vercel)
+### Railway (Recomendado)
+```bash
+# Deploy automático
+./deploy.bat  # Windows
+./deploy.sh   # Linux/Mac
+
+# Ou manual
+railway login
+railway up
+```
+
+### Vercel (Frontend)
 ```bash
 cd frontend
 vercel --prod
 ```
 
-### Backend (VPS/Cloud)
+### Heroku (Backend)
+```bash
+heroku create whatskovi-backend
+heroku addons:create heroku-postgresql:hobby-dev
+git push heroku main
+```
+
+### Outras Opções
+- Railway (Full-stack)
+- DigitalOcean App Platform
+- AWS EC2 + RDS
 - Oracle Cloud Free Tier
-- Contabo
-- DigitalOcean
-- AWS EC2
+
+📖 **Guia completo**: [DEPLOY.md](DEPLOY.md)
 
 ## 📝 Licença
 
