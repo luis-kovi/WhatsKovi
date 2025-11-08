@@ -7,8 +7,6 @@ import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { LogIn } from 'lucide-react';
 
-const pillars = ['Operações unificadas', 'Bots com IA', 'Métricas em tempo real'];
-
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
@@ -51,28 +49,15 @@ export default function LoginPage() {
 
       <div className="relative mx-auto flex min-h-[80vh] max-w-5xl items-center rounded-[32px] border border-slate-200/70 bg-white/95 shadow-[0_25px_80px_rgba(15,23,42,0.08)] backdrop-blur">
         <div className="grid w-full grid-cols-1 gap-0 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="flex flex-col justify-between border-b border-slate-100/70 px-8 py-10 text-slate-900 lg:border-b-0 lg:border-r">
-            <div className="space-y-6">
-              <Image
-                src="/brand/login_logo.png"
-                alt="WhatsKovi"
-                width={240}
-                height={90}
-                priority
-                className="h-auto w-44 object-contain"
-              />
-              <p className="text-2xl font-light text-slate-700">
-                Hub minimalista para monitorar canais, bots e squads com total visibilidade.
-              </p>
-            </div>
-            <div className="mt-8 space-y-3">
-              {pillars.map((text) => (
-                <div key={text} className="flex items-center gap-3 text-sm font-medium text-slate-500">
-                  <span className="h-1.5 w-12 rounded-full bg-gradient-to-r from-primary to-cyan-400" />
-                  {text}
-                </div>
-              ))}
-            </div>
+          <div className="flex flex-col items-center justify-center border-b border-slate-100/70 px-8 py-10 text-slate-900 lg:border-b-0 lg:border-r">
+            <Image
+              src="/brand/login_logo.png"
+              alt="WhatsKovi"
+              width={360}
+              height={140}
+              priority
+              className="h-auto w-64 object-contain"
+            />
           </div>
 
           <div className="px-8 py-10">
