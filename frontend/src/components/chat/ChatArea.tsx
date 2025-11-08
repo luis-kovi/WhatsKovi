@@ -47,6 +47,10 @@ import {
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 
+type ChatAreaProps = {
+  onHeaderContactClick?: () => void;
+};
+
 type MessageEditModalProps = {
   message: TicketMessage;
   value: string;
@@ -235,7 +239,7 @@ function ScheduledMessagesModal({ open, ticketId, contactName, onClose }: Schedu
   );
 }
 
-export default function ChatArea() {
+export default function ChatArea({ onHeaderContactClick }: ChatAreaProps = {}) {
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id;
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -1197,6 +1201,22 @@ useEffect(() => {
     identifier: selectedTicket?.contact.phoneNumber
   });
 
+  const isHeaderInteractive = typeof onHeaderContactClick === 'function';
+
+  const handleHeaderInfoTrigger = () => {
+    if (onHeaderContactClick) {
+      onHeaderContactClick();
+    }
+  };
+
+  const handleHeaderInfoKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!onHeaderContactClick) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleHeaderInfoTrigger();
+    }
+  };
+
   if (!selectedTicket) {
     return (
       <div className='flex flex-1 items-center justify-center bg-gray-50 transition-colors duration-300 dark:bg-slate-950'>
@@ -1233,21 +1253,30 @@ useEffect(() => {
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
-                {selectedTicket.contact.name}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">
-                {selectedTicket.contact.phoneNumber}
-              </p>
-              {contactEmail && (
-                <p className="truncate text-xs text-gray-500 dark:text-slate-400">{contactEmail}</p>
-              )}
-              {contactBlocked && (
-                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
-                  <Lock size={11} />
-                  Contato bloqueado
-                </div>
-              )}
+              <div
+                className={`rounded-xl ${isHeaderInteractive ? 'cursor-pointer px-1 py-0.5 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 dark:hover:bg-slate-800/80' : ''}`}
+                role={isHeaderInteractive ? 'button' : undefined}
+                tabIndex={isHeaderInteractive ? 0 : undefined}
+                onClick={isHeaderInteractive ? handleHeaderInfoTrigger : undefined}
+                onKeyDown={isHeaderInteractive ? handleHeaderInfoKeyDown : undefined}
+                aria-label={isHeaderInteractive ? 'Abrir detalhes do contato' : undefined}
+              >
+                <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                  {selectedTicket.contact.name}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                  {selectedTicket.contact.phoneNumber}
+                </p>
+                {contactEmail && (
+                  <p className="truncate text-xs text-gray-500 dark:text-slate-400">{contactEmail}</p>
+                )}
+                {contactBlocked && (
+                  <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
+                    <Lock size={11} />
+                    Contato bloqueado
+                  </div>
+                )}
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-600">
                 <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-mono uppercase tracking-widest text-gray-800 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100">
                   <Car size={12} />

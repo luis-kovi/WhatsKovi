@@ -132,6 +132,10 @@ type TicketItemProps = {
   onSelect: (id: string) => void;
 };
 
+type TicketListProps = {
+  variant?: 'default' | 'mobile';
+};
+
 function TicketItem({ ticket, isSelected, onSelect }: TicketItemProps) {
   const avatar = useAvatar({
     name: ticket.contact.name,
@@ -210,7 +214,7 @@ function TicketItem({ ticket, isSelected, onSelect }: TicketItemProps) {
   );
 }
 
-export default function TicketList() {
+export default function TicketList({ variant = 'default' }: TicketListProps = {}) {
   const {
     tickets,
     selectedTicket,
@@ -264,6 +268,7 @@ export default function TicketList() {
   const [manualPriority, setManualPriority] = useState('MEDIUM');
   const [manualTagIds, setManualTagIds] = useState<string[]>([]);
   const [manualTicketType, setManualTicketType] = useState<'WHATSAPP' | 'SMS' | 'EMAIL'>('WHATSAPP');
+  const isMobileVariant = variant === 'mobile';
   const [manualEmail, setManualEmail] = useState('');
   const [manualCarPlate, setManualCarPlate] = useState('');
   const [matchedContactName, setMatchedContactName] = useState<string | null>(null);
@@ -554,8 +559,8 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
   return (
     <>
       <div
-        className="flex flex-col border-r border-gray-200 bg-white"
-        style={{ width: 'clamp(320px, 27vw, 420px)' }}
+        className={`flex flex-col bg-white ${isMobileVariant ? 'h-full w-full border-none shadow-none' : 'border-r border-gray-200'}`}
+        style={isMobileVariant ? undefined : { width: 'clamp(320px, 27vw, 420px)' }}
       >
         <div className="border-b border-gray-200 p-4">
           <div className="flex flex-col gap-3">
@@ -1064,10 +1069,6 @@ const handleCarPlateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-
-
-
 
 
 
