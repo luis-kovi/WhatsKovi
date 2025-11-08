@@ -49,6 +49,8 @@ const toUint8Array = (base64: string) => {
 
 let serviceWorkerRegistration: ServiceWorkerRegistration | null = null;
 
+const SERVICE_WORKER_URL = '/notification-sw.js';
+
 const ensureServiceWorker = async () => {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return null;
@@ -58,8 +60,23 @@ const ensureServiceWorker = async () => {
     return serviceWorkerRegistration;
   }
 
-  serviceWorkerRegistration = await navigator.serviceWorker.register('/notification-sw.js');
-  return serviceWorkerRegistration;
+  try {
+    const existingRegistration = await navigator.serviceWorker.getRegistration('/');
+    if (
+      existingRegistration &&
+      existingRegistration.active &&
+      existingRegistration.active.scriptURL.includes(SERVICE_WORKER_URL)
+    ) {
+      serviceWorkerRegistration = existingRegistration;
+      return existingRegistration;
+    }
+
+    serviceWorkerRegistration = await navigator.serviceWorker.register(SERVICE_WORKER_URL, { scope: '/' });
+    return serviceWorkerRegistration;
+  } catch (error) {
+    console.error('[Notifications] service worker registration failed', error);
+    return null;
+  }
 };
 
 type AudioContextConstructor = typeof AudioContext;

@@ -6,6 +6,7 @@ import { I18nProvider } from '@/providers/I18nProvider'
 import { ThemeToaster } from '@/components/common/ThemeToaster'
 import { AnalyticsLoader } from '@/components/analytics/AnalyticsLoader'
 import { ResponsiveScaler } from '@/components/layout/ResponsiveScaler'
+import { PWAServiceWorker } from '@/components/pwa/PWAServiceWorker'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -60,10 +61,24 @@ const themeScript = `(() => {
 })();`;
 
 export const metadata: Metadata = {
-  title: 'WhatsKovi - Gestão de Atendimentos',
+  title: {
+    default: 'WhatsKovi - Gestão de Atendimentos',
+    template: '%s | WhatsKovi'
+  },
+  applicationName: 'WhatsKovi',
   description: 'Sistema de gestão de atendimentos via WhatsApp',
+  manifest: '/manifest.json',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#0EA5E9' },
+    { media: '(prefers-color-scheme: dark)', color: '#0EA5E9' }
+  ],
   icons: {
-    icon: '/brand/favicon.png'
+    icon: [
+      { url: '/brand/favicon.png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' }
+    ],
+    apple: '/icons/icon-192x192.png'
   }
 }
 
@@ -79,6 +94,7 @@ export default function RootLayout({
       >
         <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
         <AnalyticsLoader />
+        <PWAServiceWorker />
         <I18nProvider>
           <ThemeProvider>
             <ResponsiveScaler>
