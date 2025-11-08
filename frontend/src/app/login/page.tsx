@@ -5,25 +5,9 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
-import { LogIn, ShieldCheck, Sparkles, BarChart3 } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 
-const highlights = [
-  {
-    icon: ShieldCheck,
-    title: 'Segurança avançada',
-    description: 'Criptografia ponta a ponta e auditoria contínua.'
-  },
-  {
-    icon: BarChart3,
-    title: 'Insights acionáveis',
-    description: 'Visão holística de canais, bots e atendentes.'
-  },
-  {
-    icon: Sparkles,
-    title: 'Automação inteligente',
-    description: 'Fluxos com IA para acelerar cada atendimento.'
-  }
-];
+const pillars = ['Operações unificadas', 'Bots com IA', 'Métricas em tempo real'];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -61,113 +45,89 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.25),_transparent_45%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(6,182,212,0.25),_transparent_40%)]" />
-      <div className="absolute inset-y-0 left-1/2 hidden w-px bg-white/10 lg:block" />
+    <div className="relative min-h-screen bg-slate-100 px-4 py-10">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,118,110,0.1),_transparent_40%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(14,165,233,0.18),_transparent_45%)]" />
 
-      <div className="relative z-10 grid w-full max-w-6xl grid-cols-1 gap-8 rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-3xl lg:grid-cols-2 lg:p-10">
-        <div className="space-y-10">
-          <div className="space-y-6">
-            <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-sm font-medium tracking-wide text-white/80 backdrop-blur">
-              Nova geração de atendimento omnichannel
+      <div className="relative mx-auto flex min-h-[80vh] max-w-5xl items-center rounded-[32px] border border-slate-200/70 bg-white/95 shadow-[0_25px_80px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="grid w-full grid-cols-1 gap-0 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="flex flex-col justify-between border-b border-slate-100/70 px-8 py-10 text-slate-900 lg:border-b-0 lg:border-r">
+            <div className="space-y-6">
+              <Image
+                src="/brand/login_logo.png"
+                alt="WhatsKovi"
+                width={240}
+                height={90}
+                priority
+                className="h-auto w-44 object-contain"
+              />
+              <p className="text-2xl font-light text-slate-700">
+                Hub minimalista para monitorar canais, bots e squads com total visibilidade.
+              </p>
             </div>
-            <Image
-              src="/brand/login_logo.png"
-              alt="WhatsKovi"
-              width={320}
-              height={120}
-              priority
-              className="h-auto w-60 object-contain drop-shadow-[0_10px_40px_rgba(14,165,233,0.35)]"
-            />
-            <p className="text-lg text-white/80">
-              O cockpit definitivo para times que conectam atendimento humano, automações e inteligência
-              artificial em um único lugar.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {highlights.map(({ icon: Icon, title, description }) => (
-              <div
-                key={title}
-                className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4"
-              >
-                <div className="rounded-2xl bg-gradient-to-br from-primary/70 to-cyan-400/50 p-3 text-white">
-                  <Icon size={20} />
+            <div className="mt-8 space-y-3">
+              {pillars.map((text) => (
+                <div key={text} className="flex items-center gap-3 text-sm font-medium text-slate-500">
+                  <span className="h-1.5 w-12 rounded-full bg-gradient-to-r from-primary to-cyan-400" />
+                  {text}
                 </div>
-                <div>
-                  <p className="text-base font-semibold">{title}</p>
-                  <p className="text-sm text-white/70">{description}</p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/60">Status</p>
-            <p className="mt-2 text-3xl font-semibold">99.98% uptime</p>
-            <p className="text-sm text-white/70">Monitoramento ativo e suporte 24/7 para operações críticas.</p>
-          </div>
-        </div>
+          <div className="px-8 py-10">
+            <div className="mb-8 space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">Login</p>
+              <h1 className="text-3xl font-semibold text-slate-900">Acesse sua conta</h1>
+              <p className="text-sm text-slate-500">Continue de onde parou com os fluxos WhatsKovi.</p>
+            </div>
 
-        <div className="flex flex-col justify-center rounded-[28px] border border-white/10 bg-white/95 p-8 text-slate-900 shadow-xl backdrop-blur">
-          <div className="mb-8 space-y-2 text-center lg:text-left">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Área restrita</p>
-            <h1 className="text-3xl font-semibold text-slate-900">Entrar no painel</h1>
-            <p className="text-sm text-slate-500">
-              Use suas credenciais corporativas para acessar o ecossistema WhatsKovi.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-600">Email corporativo</label>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="mb-2 block text-sm text-slate-500">Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border-0 bg-transparent px-0 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="voce@empresa.com"
                   autoComplete="email"
                   required
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-600">Senha</label>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <div>
+                <label className="mb-2 block text-sm text-slate-500">Senha</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full border-0 bg-transparent px-0 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   placeholder="••••••••"
                   autoComplete="current-password"
                   required
                 />
               </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? (
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                ) : (
+                  <>
+                    <span>Entrar</span>
+                    <LogIn size={18} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-8 text-center text-sm text-slate-400">
+              Precisa de acesso? Fale com o administrador da sua empresa.
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary via-cyan-500 to-blue-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-primary/30 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              ) : (
-                <>
-                  <span>Entrar</span>
-                  <LogIn size={18} className="transition group-hover:translate-x-1" />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8 rounded-2xl bg-slate-50 p-4 text-center text-sm text-slate-500">
-            Precisa de acesso? Contate o administrador da sua empresa.
           </div>
         </div>
       </div>
