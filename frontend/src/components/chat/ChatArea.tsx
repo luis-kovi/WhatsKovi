@@ -1242,9 +1242,6 @@ useEffect(() => {
               {contactEmail && (
                 <p className="truncate text-xs text-gray-500 dark:text-slate-400">{contactEmail}</p>
               )}
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-gray-400">
-                Ticket #{selectedTicket.id.slice(0, 8).toUpperCase()}
-              </p>
               {contactBlocked && (
                 <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
                   <Lock size={11} />
@@ -1259,10 +1256,10 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={openCarPlateEditor}
-                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="inline-flex items-center justify-center rounded-full border border-gray-200 p-1.5 text-gray-600 transition hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  aria-label="Editar placa do carro"
                 >
                   <Pencil size={12} />
-                  Editar
                 </button>
               </div>
             </div>
